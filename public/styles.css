@@ -307,6 +307,9 @@ body.dragging-col, body.dragging-col * { cursor: row-resize !important; }
 .pane-body.is-side { flex-direction: row; }
 .pane-body.is-empty .pane-output, .pane-body.is-empty .seam-inner { display: none; }
 .pane-body.is-empty .pane-input { flex: 0 0 auto !important; max-height: 44%; min-height: 140px; }
+/* Once a tool is chosen the editor is the point: it fills the pane and the hint is a compact strip. */
+.pane-body.is-ready .pane-input { flex: 1 1 auto !important; max-height: none; }
+.pane-body.is-ready .picker { flex: none; overflow: visible; padding: 12px 16px 14px; }
 .panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; flex-basis: 0; }
 .panel-head {
   display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 6px 0 12px; flex: none;

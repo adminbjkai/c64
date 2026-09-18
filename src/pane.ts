@@ -713,6 +713,7 @@ export class PaneView {
     const empty = this.node.state.input === '';
     const fresh = this.node.state.fresh !== false;
     this.body.classList.toggle('is-empty', empty);
+    this.body.classList.toggle('is-ready', empty && !fresh);
     this.picker.hidden = !empty;
     const freshEl = this.picker.querySelector<HTMLElement>('.picker-fresh');
     const readyEl = this.picker.querySelector<HTMLElement>('.picker-ready');

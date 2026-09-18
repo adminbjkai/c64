@@ -189,6 +189,7 @@ function pickTool(id: string): void {
   const pane = board.active;
   if (!pane) return;
   pane.setMode(id);
+  paintStatus();
   pane.focus();
   highlightActiveTool();
   // Make the switch visible: flash the pane's title bar, bring it into view,
