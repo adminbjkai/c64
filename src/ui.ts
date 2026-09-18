@@ -94,7 +94,7 @@ export function toggleTheme(): Theme {
 }
 
 /** Cmd on macOS, Ctrl elsewhere — for displaying shortcut hints. */
-export const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
+export const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 export const MOD = IS_MAC ? '⌘' : 'Ctrl';
 
 /* ------------------------------------------------------------------- menu */
