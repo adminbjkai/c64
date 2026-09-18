@@ -82,7 +82,7 @@ export class Board {
     canClose: () => paneCount(this.root) > 1,
     changed: () => this.persist(),
     outputChanged: (id, text) => this.propagate(id, text),
-    otherPanes: (id) => allPanes(this.root).filter((p) => p.id !== id).map((p) => ({ id: p.id, title: this.titleOf(p.id) })),
+    otherPanes: (id) => allPanes(this.root).filter((p) => p.id !== id).map((p) => ({ id: p.id, title: this.titleOf(p.id, true) })),
     link: (id, sourceId) => this.link(id, sourceId),
     sendOn: (id) => this.addPiped(id),
     titleOf: (id) => this.titleOf(id),
@@ -101,15 +101,18 @@ export class Board {
     return this.zoomedId;
   }
 
-  /** "Pane 2 · JSON" or the user's own title. */
-  titleOf(id: string): string {
+  /**
+   * The user's own title, or "Pane 2". With `long`, the automatic title also
+   * names the tool ("Pane 2 · JSON Path") for menus and the palette.
+   */
+  titleOf(id: string, long = false): string {
     const order = allPanes(this.root);
     const idx = order.findIndex((p) => p.id === id);
     const node = order[idx];
     if (!node) return 'Pane';
     if (node.state.title) return node.state.title;
     const v = this.views.get(id);
-    return `Pane ${idx + 1} · ${v ? v.mode.label : node.state.mode}`;
+    return long ? `Pane ${idx + 1} · ${v ? v.mode.label : node.state.mode}` : `Pane ${idx + 1}`;
   }
 
   setActive(id: string): void {
@@ -142,7 +145,7 @@ export class Board {
     this.add(sourceId, 'row', node);
     const v = this.views.get(sourceId);
     if (v) this.views.get(node.id)?.setInput(v.outputText);
-    toast(`New pane reads its input from ${this.titleOf(sourceId)}`);
+    toast(`New pane reads its input from ${this.titleOf(sourceId, true)}`);
   }
 
   duplicate(id: string): void {

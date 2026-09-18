@@ -28,18 +28,23 @@ if (!file.boards.length) {
 const currentRecord = (): BoardRecord => file.boards.find((b) => b.id === file.current) ?? file.boards[0]!;
 
 const host = document.getElementById('board')!;
+// The Board constructor fires events before `board` is assigned; ignore those.
+let ready = false;
 const board = new Board(host, currentRecord().root, {
   changed() {
+    if (!ready) return;
     const rec = currentRecord();
     rec.root = board.root;
     rec.updated = Date.now();
     saveBoards(file);
   },
   focusChanged() {
+    if (!ready) return;
     highlightActiveTool();
     paintStatus();
   },
 });
+ready = true;
 // The board may have sanitised the tree — keep the record pointing at the live one.
 currentRecord().root = board.root;
 
@@ -367,11 +372,11 @@ const palette = new Palette((): Command[] => {
   if (active) {
     cmds.push({ id: 'pane:rename', group: 'Pane', label: 'Rename pane…', icon: 'edit', run: () => board.rename(active.node.id) });
     for (const p of board.panes) {
-      if (p !== active) cmds.push({ id: `link:${p.node.id}`, group: 'Pane', label: `Read input from ${board.titleOf(p.node.id)}`, icon: 'pipe', run: () => board.link(active.node.id, p.node.id) });
+      if (p !== active) cmds.push({ id: `link:${p.node.id}`, group: 'Pane', label: `Read input from ${board.titleOf(p.node.id, true)}`, icon: 'pipe', run: () => board.link(active.node.id, p.node.id) });
     }
     if (active.node.state.sourceId) cmds.push({ id: 'pane:unlink', group: 'Pane', label: 'Unlink input', icon: 'close', run: () => board.link(active.node.id, null) });
   }
-  for (const p of board.panes) cmds.push({ id: `focus:${p.node.id}`, group: 'Go to pane', label: board.titleOf(p.node.id), icon: 'chevronRight', hint: p.node.state.input ? `${p.node.state.input.length.toLocaleString()} chars` : 'empty', run: () => board.focusPane(p.node.id) });
+  for (const p of board.panes) cmds.push({ id: `focus:${p.node.id}`, group: 'Go to pane', label: board.titleOf(p.node.id, true), icon: 'chevronRight', hint: p.node.state.input ? `${p.node.state.input.length.toLocaleString()} chars` : 'empty', run: () => board.focusPane(p.node.id) });
   for (const b of file.boards) cmds.push({ id: `board:${b.id}`, group: 'Boards', label: b.name, icon: b.id === file.current ? 'check' : 'folder', hint: b.id === file.current ? 'current' : undefined, run: () => switchBoard(b.id) });
   cmds.push(
     { id: 'board:new', group: 'Boards', label: 'New board', icon: 'plus', run: () => newBoard() },
@@ -417,7 +422,7 @@ function paintStatus(): void {
   const a = board.active;
   if (a) {
     const r = a.result;
-    statusActive.textContent = `${board.titleOf(a.node.id)}${r.status ? ' — ' + r.status : ''}`;
+    statusActive.textContent = `${board.titleOf(a.node.id, true)}${r.status ? ' — ' + r.status : ''}`;
     statusActive.classList.toggle('is-error', !!r.error);
   }
 }

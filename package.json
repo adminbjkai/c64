@@ -13,7 +13,8 @@
     "dev": "node server.mjs --watch",
     "test": "npm run build && node --test \"dist/tests/**/*.test.js\"",
     "screenshots": "python3 scripts/screenshots.py",
-    "icons": "python3 scripts/make-icons.py"
+    "icons": "python3 scripts/make-icons.py",
+    "smoke": "python3 scripts/smoke.py"
   },
   "devDependencies": {
     "@types/node": "^22.20.3",

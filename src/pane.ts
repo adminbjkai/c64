@@ -139,9 +139,9 @@ export class PaneView {
     this.descEl = h('span.mode-desc');
 
     this.layoutBtn = ibtn('columns', '', () => this.toggleLayout());
-    this.zoomBtn = ibtn('maximize', 'Maximise this pane (Alt+Shift+Enter)', () => board.zoom(node.id));
+    this.zoomBtn = ibtn('maximize', 'Maximise this pane (Alt+Shift+Enter)', () => board.zoom(node.id), 'zoom-btn');
     const explainBtn = tbtn('bulb', 'Explain', 'What is this input? Local analysis, no server (Alt+Shift+E)', () => this.toggleExplain());
-    const moreBtn = ibtn('settings', 'More pane actions', (e) => this.openMenu(e.currentTarget as HTMLElement));
+    const moreBtn = ibtn('settings', 'More pane actions', (e) => this.openMenu(e.currentTarget as HTMLElement), 'more-btn');
     const addRightBtn = ibtn('splitRight', 'Add pane to the right (Alt+Shift+R)', () => board.addRight(node.id));
     const addBelowBtn = ibtn('splitDown', 'Add pane below (Alt+Shift+B)', () => board.addBelow(node.id));
     this.closeBtn = ibtn('close', 'Close pane (Alt+Shift+W)', () => board.close(node.id), 'close');
