@@ -23,7 +23,7 @@
 | 6 | Server: caching, gzip, ETag, prod mode; systemd; nginx; ports/subdomain docs | `curl -sI https://c64.bjk.ai` 200; healthz | ✅ | HTTP/2 200, CSP header, br encoding, `{"ok":true,"version":"1.0.0"}`, service active; SERVER_PORTS/SUBDOMAINS rows added |
 | 7 | Docs: README, docs/, CHANGELOG, CONTRIBUTING, LICENSE, screenshots | files exist and accurate | ✅ | files in repo; docs/modes.md + shortcuts.md generated from registries (CI checks sync) |
 | 8 | GitHub repo + CI + release v1.0.0 | `gh release view v1.0.0` | ✅ | github.com/adminbjkai/c64; CI success on main + v1.0.0 (Node 20/22/24); release asset c64-v1.0.0.tar.gz |
-| 9 | Fresh-context verification | verifier PASS | 🔶 | verifier running |
+| 9 | Fresh-context verification | verifier PASS | ✅ | fable-verifier: PASS on all 8 criteria (tests, registries, docs sync, leftovers, live site, browser, privacy, GitHub) |
 
 ## Decisions log
 - Keep zero runtime deps and no bundler (auditability is the product's point). Hash mode uses WebCrypto (async) → `run` may return a Promise. (2026-09-18)
