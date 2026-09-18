@@ -44,24 +44,27 @@ function getWorker(): Worker | null {
   return worker;
 }
 
-export function runModeSync(modeId: string, input: string, ctx: RunContext): ModeResult {
+const unexpected = (e: unknown): ModeResult => ({ output: '', error: { message: `Unexpected error: ${(e as Error).message}` }, status: 'Error' });
+
+/** Run a mode on the calling thread, normalising sync/async and thrown errors. */
+export async function runModeLocal(modeId: string, input: string, ctx: RunContext): Promise<ModeResult> {
   try {
-    return getMode(modeId).run(input, ctx);
+    return await getMode(modeId).run(input, ctx);
   } catch (e) {
-    return { output: '', error: { message: `Unexpected error: ${(e as Error).message}` }, status: 'Error' };
+    return unexpected(e);
   }
 }
 
 /**
- * Run a mode. Resolves synchronously-fast for small inputs (the promise is
- * already settled when returned), asynchronously for large ones.
+ * Run a mode. Small inputs run on this thread (a microtask away), large
+ * ones in the worker.
  */
 export function runMode(modeId: string, input: string, ctx: RunContext): Promise<ModeResult> {
   if (input.length < WORKER_THRESHOLD || typeof Worker === 'undefined') {
-    return Promise.resolve(runModeSync(modeId, input, ctx));
+    return runModeLocal(modeId, input, ctx);
   }
   const w = getWorker();
-  if (!w) return Promise.resolve(runModeSync(modeId, input, ctx));
+  if (!w) return runModeLocal(modeId, input, ctx);
   const id = ++seq;
   return new Promise((resolve) => {
     pending.set(id, { resolve });

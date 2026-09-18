@@ -1,5 +1,5 @@
 /**
- * Keyboard shortcuts — every core action has one (spec §2.6 / §9).
+ * Keyboard shortcuts — every core action has one.
  *
  * Matching uses `event.code` (physical key) rather than `event.key`, because
  * on macOS Alt+Shift+<letter> produces a symbol in `key` (e.g. "Â") while

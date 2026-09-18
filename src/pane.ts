@@ -14,7 +14,7 @@
  */
 
 import type { PaneNode } from './layout.js';
-import { MODES, getMode, type ModeResult, type ToolMode } from './modes/index.js';
+import { MODES, CATEGORIES, getMode, type ModeResult, type ToolMode } from './modes/index.js';
 import { VIEWS, type ViewContext } from './views/index.js';
 import { runMode } from './runner.js';
 import { ExplainPanel } from './explain-ui.js';
@@ -36,7 +36,6 @@ const DEBOUNCE_MS = 180;
 const SEAM_MIN = 0.1;
 const SEAM_MAX = 0.9;
 
-const CATEGORY_ORDER = ['JSON', 'Formats', 'Encoding', 'Text'] as const;
 
 /** File extension for "Download output" per mode / state. */
 function outputExtension(mode: ToolMode, pretty: boolean, options: Record<string, unknown>): string {
@@ -96,7 +95,7 @@ export class PaneView {
     // ---- title bar --------------------------------------------------------
     this.modeIcon = h('span.mode-icon');
     this.modeSelect = h<HTMLSelectElement>('select.mode-select', { 'aria-label': 'Tool', title: 'Switch tool (Alt+Shift+M)' });
-    for (const cat of CATEGORY_ORDER) {
+    for (const cat of CATEGORIES) {
       const group = h<HTMLOptGroupElement>('optgroup', { label: cat });
       for (const m of MODES.filter((m) => m.category === cat)) group.append(h('option', { value: m.id }, m.label));
       this.modeSelect.append(group);
@@ -347,7 +346,7 @@ export class PaneView {
     const seq = ++this.runSeq;
     const promise = runMode(s.mode, s.input, { pretty: s.pretty, options: s.options });
     // Large inputs go to the worker: show that something is happening only
-    // if it takes noticeable time (spec: no spinners under ~50 ms).
+    // if it takes noticeable time (no spinner flashes for instant runs).
     const slow = window.setTimeout(() => this.el.classList.add('is-busy'), 120);
     void promise.then((result) => {
       clearTimeout(slow);
@@ -448,14 +447,10 @@ export class PaneView {
           this.controlsEl.append(h('label.control-wrap.grow', {}, h('span.control-label', {}, c.label), input));
           break;
         }
-        case 'file':
-          // The Input panel always has an Upload button now; mode-level file
-          // controls are redundant and intentionally not rendered.
-          break;
       }
     }
     this.prettySeg.hidden = !m.supportsPretty;
-    this.optionsBar.hidden = !m.supportsPretty && m.controls.every((c) => c.kind === 'file');
+    this.optionsBar.hidden = !m.supportsPretty && m.controls.length === 0;
   }
 
   private updatePrettyButton(): void {
@@ -488,7 +483,7 @@ export class PaneView {
   /** The "what do you want to do?" grid shown while the pane is empty. */
   private buildPicker(): HTMLElement {
     const grid = h('div.tool-grid');
-    for (const cat of CATEGORY_ORDER) {
+    for (const cat of CATEGORIES) {
       const tools = MODES.filter((m) => m.category === cat);
       const section = h('section.tool-section', {}, h('h4', {}, cat));
       const cards = h('div.tool-cards');

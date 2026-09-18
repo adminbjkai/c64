@@ -7,7 +7,7 @@
 import { Board } from './board.js';
 import { loadBoard, saveBoardNow } from './store.js';
 import { installShortcuts, SHORTCUTS } from './shortcuts.js';
-import { MODES } from './modes/index.js';
+import { MODES, CATEGORIES } from './modes/index.js';
 import { icon } from './icons.js';
 import { applyTheme, currentTheme, toggleTheme, h, toast } from './ui.js';
 
@@ -25,7 +25,6 @@ addEventListener('visibilitychange', () => {
 
 /* ---------------------------------------------------------------- sidebar */
 
-const CATEGORIES = ['JSON', 'Formats', 'Encoding', 'Text'] as const;
 const nav = document.getElementById('tool-nav')!;
 const search = document.getElementById('tool-search') as HTMLInputElement;
 document.getElementById('search-icon')!.append(icon('search', 14));

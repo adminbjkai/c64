@@ -13,11 +13,11 @@ interface Request {
   ctx: RunContext;
 }
 
-self.addEventListener('message', (e: MessageEvent<Request>) => {
+self.addEventListener('message', async (e: MessageEvent<Request>) => {
   const { id, modeId, input, ctx } = e.data;
   let result: ModeResult;
   try {
-    result = getMode(modeId).run(input, ctx);
+    result = await getMode(modeId).run(input, ctx);
   } catch (err) {
     result = { output: '', error: { message: `Unexpected error: ${(err as Error).message}` }, status: 'Error' };
   }

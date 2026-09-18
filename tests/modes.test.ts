@@ -15,12 +15,15 @@ import type { TreeData } from '../src/views/json-tree.js';
 
 const ctx = (options: Record<string, unknown> = {}, pretty = true) => ({ pretty, options });
 
-test('every registered mode has a sample that runs without error', () => {
+test('every registered mode has a sample that runs without error', async () => {
+  const ids = new Set<string>();
   for (const m of MODES) {
-    const r = m.run(m.sample, ctx());
+    assert.ok(!ids.has(m.id), `duplicate mode id ${m.id}`);
+    ids.add(m.id);
+    const r = await m.run(m.sample, ctx());
     assert.equal(r.error, undefined, `${m.id} sample failed: ${r.error?.message}`);
     assert.ok(r.output.length > 0 || r.view, `${m.id} produced nothing`);
-    assert.equal(m.run('', ctx()).output, '', `${m.id} empty input`);
+    assert.equal((await m.run('', ctx())).output, '', `${m.id} empty input`);
   }
   assert.equal(getMode('nope').id, 'json');
 });

@@ -81,7 +81,7 @@ export const base64Mode: ToolMode = {
   description: 'Encode text to Base64 or decode it back — standard or URL-safe.',
   category: 'Encoding',
   icon: 'base64',
-  emptyHint: 'Paste text to encode, or Base64 to decode (auto-detected). Upload a .txt file with the button above.',
+  emptyHint: 'Paste text to encode, or Base64 to decode (auto-detected). Upload a file with the Input panel's Upload button.',
   sample: 'eyJzZXJ2aWNlIjoiYXBpIiwidmVyc2lvbiI6MywiaGVhbHRoeSI6dHJ1ZX0=',
   supportsPretty: true,
   controls: [
@@ -97,7 +97,6 @@ export const base64Mode: ToolMode = {
       ],
     },
     { kind: 'toggle', key: 'urlSafe', label: 'URL-safe', default: false },
-    { kind: 'file', label: 'Upload .txt', accept: '.txt,text/plain' },
   ],
   run: runBase64,
 };

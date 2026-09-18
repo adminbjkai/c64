@@ -40,16 +40,16 @@ export interface ModeResult {
 export type ModeControl =
   | { kind: 'select'; key: string; label: string; options: { value: string; label: string }[]; default: string }
   | { kind: 'toggle'; key: string; label: string; default: boolean }
-  | { kind: 'text'; key: string; label: string; placeholder: string; default: string }
-  /** A file picker; the chosen file's text replaces the pane input. */
-  | { kind: 'file'; label: string; accept: string };
+  | { kind: 'text'; key: string; label: string; placeholder: string; default: string };
 
 export interface RunContext {
   pretty: boolean;
   options: Record<string, unknown>;
 }
 
-export type ToolCategory = 'JSON' | 'Formats' | 'Encoding' | 'Text';
+/** Sidebar / picker sections, in display order. */
+export const CATEGORIES = ['JSON', 'Formats', 'Encoding', 'Text', 'Web', 'Crypto & IDs', 'Developer'] as const;
+export type ToolCategory = (typeof CATEGORIES)[number];
 
 export interface ToolMode {
   id: string;
@@ -59,6 +59,8 @@ export interface ToolMode {
   category: ToolCategory;
   /** Icon id from src/icons.ts. */
   icon: string;
+  /** Extra search terms for the sidebar filter and command palette. */
+  keywords?: string[];
   /** One-line hint shown in an empty pane. */
   emptyHint: string;
   /** Sample input the "paste sample" button inserts. */
@@ -66,7 +68,11 @@ export interface ToolMode {
   controls: ModeControl[];
   /** Whether the Raw/Pretty toggle changes anything for this mode. */
   supportsPretty: boolean;
-  run(input: string, ctx: RunContext): ModeResult;
+  /**
+   * Pure transform. May return a Promise when the work is inherently async
+   * (e.g. WebCrypto digests); the runner and worker await either form.
+   */
+  run(input: string, ctx: RunContext): ModeResult | Promise<ModeResult>;
 }
 
 /** Turn any thrown parser error (ours carry line/col/hint) into a Diagnostic. */

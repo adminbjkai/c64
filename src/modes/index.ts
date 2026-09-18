@@ -35,4 +35,5 @@ export function getMode(id: string): ToolMode {
   return MODES.find((m) => m.id === id) ?? MODES[0]!;
 }
 
-export type { ToolMode, ModeResult, ModeControl, ModeView, Diagnostic, RunContext } from './types.js';
+export { CATEGORIES } from './types.js';
+export type { ToolMode, ToolCategory, ModeResult, ModeControl, ModeView, Diagnostic, RunContext } from './types.js';
