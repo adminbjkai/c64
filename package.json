@@ -1,0 +1,21 @@
+{
+  "name": "c64-workspace",
+  "version": "0.1.0",
+  "description": "Local-first, dependency-free browser workspace for decoding, formatting and exploring structured text in tileable panes.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "start": "npm run build && node server.mjs",
+    "dev": "node server.mjs --watch",
+    "test": "npm run build && node --test \"dist/tests/**/*.test.js\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.3",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

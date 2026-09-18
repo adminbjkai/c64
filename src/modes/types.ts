@@ -1,0 +1,101 @@
+/**
+ * The contract every pane tool implements. A mode is a pure function from
+ * (input, pane settings) to an output string plus diagnostics — no DOM, so
+ * modes are trivially unit-testable and run unchanged inside the Web Worker.
+ *
+ * Modes that need a richer display than text (tree, graph, table, JWT) return
+ * a serializable `view` descriptor; the matching renderer in src/views/ turns
+ * it into DOM on the main thread. `output` is still filled with a plain-text
+ * equivalent so Copy always has something sensible to copy.
+ */
+
+export interface Diagnostic {
+  message: string;
+  /** 1-based, when the parser can pinpoint the problem. */
+  line?: number;
+  col?: number;
+  /** Plain-English suggestion, e.g. "did you leave a trailing comma?" */
+  hint?: string;
+}
+
+/** A structured result rendered by src/views/<kind>.ts. Must survive structured clone. */
+export interface ModeView {
+  kind: string;
+  data: unknown;
+}
+
+export interface ModeResult {
+  output: string;
+  /** Set when the input could not be processed; output then holds "" or a partial. */
+  error?: Diagnostic;
+  /** Things that were tolerated/auto-fixed, shown as a soft notice. */
+  notes?: string[];
+  /** Short status line, e.g. "Valid JSON · 3 keys · 1.2 KB". */
+  status?: string;
+  /** Rich display instead of the plain <pre> output. */
+  view?: ModeView;
+}
+
+/** A header control the pane renders for a mode-specific option. */
+export type ModeControl =
+  | { kind: 'select'; key: string; label: string; options: { value: string; label: string }[]; default: string }
+  | { kind: 'toggle'; key: string; label: string; default: boolean }
+  | { kind: 'text'; key: string; label: string; placeholder: string; default: string }
+  /** A file picker; the chosen file's text replaces the pane input. */
+  | { kind: 'file'; label: string; accept: string };
+
+export interface RunContext {
+  pretty: boolean;
+  options: Record<string, unknown>;
+}
+
+export type ToolCategory = 'JSON' | 'Formats' | 'Encoding' | 'Text';
+
+export interface ToolMode {
+  id: string;
+  label: string;
+  /** One sentence shown on tool cards and under the pane title. */
+  description: string;
+  category: ToolCategory;
+  /** Icon id from src/icons.ts. */
+  icon: string;
+  /** One-line hint shown in an empty pane. */
+  emptyHint: string;
+  /** Sample input the "paste sample" button inserts. */
+  sample: string;
+  controls: ModeControl[];
+  /** Whether the Raw/Pretty toggle changes anything for this mode. */
+  supportsPretty: boolean;
+  run(input: string, ctx: RunContext): ModeResult;
+}
+
+/** Turn any thrown parser error (ours carry line/col/hint) into a Diagnostic. */
+export function toDiagnostic(e: unknown): Diagnostic {
+  const err = e as { message?: string; line?: number; col?: number; hint?: string };
+  return {
+    message: err?.message ?? String(e),
+    line: typeof err?.line === 'number' ? err.line : undefined,
+    col: typeof err?.col === 'number' ? err.col : undefined,
+    hint: typeof err?.hint === 'string' ? err.hint : undefined,
+  };
+}
+
+/** Standard "failed" result with a status line derived from the diagnostic. */
+export function failure(what: string, e: unknown): ModeResult {
+  const d = toDiagnostic(e);
+  return {
+    output: '',
+    error: d,
+    status: d.line ? `Invalid ${what} · line ${d.line}, col ${d.col}` : `Invalid ${what}`,
+  };
+}
+
+export function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+export function byteLength(s: string): number {
+  return new TextEncoder().encode(s).length;
+}
