@@ -1,0 +1,26 @@
+# systemd unit for the c64 static server.
+# Install: sudo cp deploy/c64.bjk.ai.service /etc/systemd/system/
+#          sudo systemctl daemon-reload && sudo systemctl enable --now c64.bjk.ai
+[Unit]
+Description=c64.bjk.ai local-first encode / decode / format workspace
+After=network.target
+
+[Service]
+Type=simple
+User=bjkai
+Group=bjkai
+WorkingDirectory=/apps/c64
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=8166
+ExecStart=/usr/local/bin/node /apps/c64/server.mjs
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/apps/c64
+
+[Install]
+WantedBy=multi-user.target

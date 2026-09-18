@@ -1,7 +1,7 @@
 /**
  * Board — projects the layout tree (src/layout.ts) onto the DOM and handles
- * the interactions that change it: Add Right / Add Below, Close, and dragging
- * the seams between panes.
+ * the interactions that change it: Add Right / Add Below, Close (with undo),
+ * Duplicate, Swap, Maximise, pipes between panes, and dragging the seams.
  *
  * Rendering strategy: the split structure is rebuilt from scratch on every
  * structural change (cheap — a handful of divs), while PaneView elements are
@@ -16,27 +16,51 @@ import {
   paneCount,
   allPanes,
   findPane,
+  findParent,
   createPane,
+  clonePane,
+  swapPanes,
+  sanitize,
   type LayoutNode,
   type SplitNode,
   type PaneNode,
 } from './layout.js';
 import { PaneView, type BoardActions } from './pane.js';
-import { saveBoard } from './store.js';
 import { h, toast } from './ui.js';
+
+interface ClosedEntry {
+  node: PaneNode;
+  /** Neighbour to re-attach next to, and on which axis. */
+  anchorId: string;
+  dir: 'row' | 'col';
+}
+
+export interface BoardEvents {
+  /** The tree or a pane's persisted state changed. */
+  changed(): void;
+  /** Active pane / pane set changed (for the status bar, palette, sidebar). */
+  focusChanged(): void;
+}
 
 export class Board {
   root: LayoutNode;
   private readonly views = new Map<string, PaneView>();
   private activeId: string | null = null;
+  private zoomedId: string | null = null;
+  private readonly closed: ClosedEntry[] = [];
 
   constructor(
     private readonly host: HTMLElement,
     initial: LayoutNode | null,
+    private readonly events: BoardEvents,
   ) {
     this.root = initial ?? createPane();
     // Any focus inside a pane makes it the active one (target of shortcuts).
     host.addEventListener('focusin', (e) => {
+      const pane = (e.target as HTMLElement).closest<HTMLElement>('.pane');
+      if (pane?.dataset['paneId']) this.setActive(pane.dataset['paneId']);
+    });
+    host.addEventListener('pointerdown', (e) => {
       const pane = (e.target as HTMLElement).closest<HTMLElement>('.pane');
       if (pane?.dataset['paneId']) this.setActive(pane.dataset['paneId']);
     });
@@ -51,31 +75,105 @@ export class Board {
     addRight: (id) => this.add(id, 'row'),
     addBelow: (id) => this.add(id, 'col'),
     close: (id) => this.close(id),
+    duplicate: (id) => this.duplicate(id),
+    swap: (id, delta) => this.swap(id, delta),
+    zoom: (id) => this.toggleZoom(id),
+    isZoomed: (id) => this.zoomedId === id,
     canClose: () => paneCount(this.root) > 1,
     changed: () => this.persist(),
+    outputChanged: (id, text) => this.propagate(id, text),
+    otherPanes: (id) => allPanes(this.root).filter((p) => p.id !== id).map((p) => ({ id: p.id, title: this.titleOf(p.id) })),
+    link: (id, sourceId) => this.link(id, sourceId),
+    sendOn: (id) => this.addPiped(id),
+    titleOf: (id) => this.titleOf(id),
+    rename: (id) => this.rename(id),
   };
 
   get active(): PaneView | null {
     return this.activeId ? (this.views.get(this.activeId) ?? null) : null;
   }
 
+  get panes(): PaneView[] {
+    return allPanes(this.root).map((p) => this.views.get(p.id)!).filter(Boolean);
+  }
+
+  get zoomed(): string | null {
+    return this.zoomedId;
+  }
+
+  /** "Pane 2 · JSON" or the user's own title. */
+  titleOf(id: string): string {
+    const order = allPanes(this.root);
+    const idx = order.findIndex((p) => p.id === id);
+    const node = order[idx];
+    if (!node) return 'Pane';
+    if (node.state.title) return node.state.title;
+    const v = this.views.get(id);
+    return `Pane ${idx + 1} · ${v ? v.mode.label : node.state.mode}`;
+  }
+
   setActive(id: string): void {
     if (this.activeId === id) return;
     this.activeId = id;
     for (const [pid, v] of this.views) v.el.classList.toggle('is-active', pid === id);
+    this.events.focusChanged();
   }
 
-  add(targetId: string, dir: 'row' | 'col'): void {
+  add(targetId: string, dir: 'row' | 'col', fresh?: PaneNode): PaneNode | null {
     const target = findPane(this.root, targetId);
-    if (!target) return;
+    if (!target) return null;
     // A new pane inherits the neighbour's mode/options — usually what you
     // want when comparing two payloads side by side. Input starts empty.
-    const fresh = createPane({ mode: target.state.mode, options: { ...target.state.options }, pretty: target.state.pretty });
-    this.root = addSibling(this.root, targetId, dir, fresh);
+    const node = fresh ?? createPane({ mode: target.state.mode, options: { ...target.state.options }, pretty: target.state.pretty, layout: target.state.layout });
+    this.root = addSibling(this.root, targetId, dir, node);
+    this.zoomedId = null;
     this.render();
     this.persist();
-    this.setActive(fresh.id);
-    this.views.get(fresh.id)?.focus();
+    this.setActive(node.id);
+    this.views.get(node.id)?.focus();
+    return node;
+  }
+
+  /** Add a pane to the right whose input is piped from `sourceId`. */
+  addPiped(sourceId: string): void {
+    const src = findPane(this.root, sourceId);
+    if (!src) return;
+    const node = createPane({ mode: 'json', layout: src.state.layout, sourceId });
+    this.add(sourceId, 'row', node);
+    const v = this.views.get(sourceId);
+    if (v) this.views.get(node.id)?.setInput(v.outputText);
+    toast(`New pane reads its input from ${this.titleOf(sourceId)}`);
+  }
+
+  duplicate(id: string): void {
+    const node = findPane(this.root, id);
+    if (!node) return;
+    this.add(id, 'row', clonePane(node));
+    toast('Pane duplicated');
+  }
+
+  swap(id: string, delta: 1 | -1): void {
+    const order = allPanes(this.root);
+    const idx = order.findIndex((p) => p.id === id);
+    const other = order[idx + delta];
+    if (!other) {
+      toast(delta > 0 ? 'Already the last pane' : 'Already the first pane');
+      return;
+    }
+    swapPanes(this.root, id, other.id);
+    this.render();
+    this.persist();
+    this.views.get(id)?.focus();
+  }
+
+  rename(id: string): void {
+    const node = findPane(this.root, id);
+    if (!node) return;
+    const name = prompt('Pane name (leave empty for the automatic one)', node.state.title ?? '');
+    if (name === null) return;
+    node.state.title = name.trim() ? name.trim().slice(0, 80) : undefined;
+    this.refreshTitles();
+    this.persist();
   }
 
   close(id: string): void {
@@ -83,20 +181,51 @@ export class Board {
       toast('The last pane stays — the board is never empty');
       return;
     }
+    const node = findPane(this.root, id);
+    if (!node) return;
     // Pick a neighbour to focus afterwards: the pane before it in reading order.
     const order = allPanes(this.root);
     const idx = order.findIndex((p) => p.id === id);
     const next = order[idx - 1] ?? order[idx + 1];
+    const parent = findParent(this.root, id);
+    this.closed.push({ node, anchorId: (idx > 0 ? order[idx - 1] : order[idx + 1])!.id, dir: parent?.dir ?? 'row' });
+    if (this.closed.length > 10) this.closed.shift();
+
+    // Panes that were piped from this one keep their last input, unlinked.
+    for (const p of allPanes(this.root)) if (p.state.sourceId === id) this.link(p.id, null);
 
     this.root = removePane(this.root, id);
-    this.views.get(id)?.el.remove();
+    this.views.get(id)?.destroy();
     this.views.delete(id);
+    if (this.zoomedId === id) this.zoomedId = null;
     this.render();
     this.persist();
     if (next) {
       this.setActive(next.id);
       this.views.get(next.id)?.focus();
     }
+    toast('Pane closed — Alt+Shift+Z restores it');
+  }
+
+  /** Re-open the most recently closed pane next to where it was. */
+  undoClose(): void {
+    const entry = this.closed.pop();
+    if (!entry) {
+      toast('Nothing to undo');
+      return;
+    }
+    const anchor = findPane(this.root, entry.anchorId) ? entry.anchorId : allPanes(this.root)[0]!.id;
+    this.add(anchor, entry.dir, entry.node);
+    toast('Pane restored');
+  }
+
+  toggleZoom(id?: string): void {
+    const target = id ?? this.activeId;
+    if (!target) return;
+    this.zoomedId = this.zoomedId === target ? null : target;
+    this.render();
+    this.views.get(target)?.focus();
+    this.events.focusChanged();
   }
 
   /** Move focus to the previous/next pane in reading order (wraps). */
@@ -105,20 +234,100 @@ export class Board {
     if (!order.length) return;
     const idx = Math.max(0, order.findIndex((p) => p.id === this.activeId));
     const next = order[(idx + delta + order.length) % order.length]!;
+    if (this.zoomedId && this.zoomedId !== next.id) this.zoomedId = next.id;
     this.setActive(next.id);
+    this.render();
     this.views.get(next.id)?.focus();
   }
 
+  focusPane(id: string): void {
+    if (!findPane(this.root, id)) return;
+    if (this.zoomedId && this.zoomedId !== id) {
+      this.zoomedId = id;
+      this.render();
+    }
+    this.setActive(id);
+    this.views.get(id)?.focus();
+  }
+
+  /* ---------------------------------------------------------------- pipes */
+
+  /** Make pane `id` read its input from `sourceId` (null = unlink). */
+  link(id: string, sourceId: string | null): void {
+    const node = findPane(this.root, id);
+    if (!node) return;
+    if (sourceId && (sourceId === id || this.wouldCycle(id, sourceId))) {
+      toast('That would create a loop');
+      return;
+    }
+    node.state.sourceId = sourceId ?? undefined;
+    const v = this.views.get(id);
+    v?.refreshLink();
+    if (sourceId) {
+      const src = this.views.get(sourceId);
+      if (src) v?.setInput(src.outputText);
+    }
+    this.persist();
+  }
+
+  private wouldCycle(id: string, sourceId: string): boolean {
+    let cur: string | undefined = sourceId;
+    const seen = new Set<string>();
+    while (cur) {
+      if (cur === id || seen.has(cur)) return true;
+      seen.add(cur);
+      cur = findPane(this.root, cur)?.state.sourceId;
+    }
+    return false;
+  }
+
+  private propagate(sourceId: string, text: string): void {
+    for (const p of allPanes(this.root)) {
+      if (p.state.sourceId === sourceId) this.views.get(p.id)?.setInput(text);
+    }
+  }
+
+  /* ------------------------------------------------------------ swapping */
+
+  /** Replace the whole tree (board switch / import). */
+  load(root: LayoutNode): void {
+    const clean = sanitize(root) ?? createPane();
+    for (const v of this.views.values()) v.destroy();
+    this.views.clear();
+    this.closed.length = 0;
+    this.zoomedId = null;
+    this.root = clean;
+    this.render();
+    const first = allPanes(this.root)[0]!;
+    this.activeId = null;
+    this.setActive(first.id);
+    this.events.focusChanged();
+  }
+
   persist(): void {
-    saveBoard(this.root);
+    this.events.changed();
   }
 
   /* ----------------------------------------------------------- rendering */
 
   render(): void {
-    const tree = this.build(this.root);
-    this.host.replaceChildren(tree);
-    for (const v of this.views.values()) v.refreshCloseState();
+    if (this.zoomedId && findPane(this.root, this.zoomedId)) {
+      const view = this.viewFor(findPane(this.root, this.zoomedId)!);
+      // Keep the other panes alive (they own editors), just not displayed.
+      const hidden = h('div.board-hidden', { hidden: true });
+      for (const p of allPanes(this.root)) if (p.id !== this.zoomedId) hidden.append(this.viewFor(p).el);
+      this.host.replaceChildren(h('div.split.split-zoom', {}, view.el), hidden);
+    } else {
+      this.host.replaceChildren(this.build(this.root));
+    }
+    this.host.classList.toggle('is-zoomed', this.zoomedId !== null);
+    for (const v of this.views.values()) v.refreshChrome();
+    this.refreshTitles();
+  }
+
+  refreshTitles(): void {
+    for (const [id, v] of this.views) v.setTitle(this.titleOf(id));
+    this.events.focusChanged();
   }
 
   private build(node: LayoutNode): HTMLElement {
@@ -154,7 +363,7 @@ export class Board {
       'aria-orientation': horizontalMotion ? 'vertical' : 'horizontal',
       'aria-label': 'Resize panes',
       tabindex: '0',
-      title: horizontalMotion ? 'Drag to resize · ←/→ keys nudge' : 'Drag to resize · ↑/↓ keys nudge',
+      title: horizontalMotion ? 'Drag to resize · ←/→ keys nudge · double-click to even out' : 'Drag to resize · ↑/↓ keys nudge · double-click to even out',
     });
 
     const applySizes = () => {

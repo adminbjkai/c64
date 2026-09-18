@@ -1,11 +1,11 @@
 /**
  * PaneView — one tool instance. Structure (top → bottom):
  *
- *   ┌ title bar   : tool icon + name (a dropdown), description, Explain, split/close
- *   ├ options bar : Pretty | Raw segmented control, mode-specific options, layout toggle
- *   ├ INPUT panel : label, counters, Paste · Upload · Sample · Clear, the editor
+ *   ┌ title bar   : pane name, tool dropdown, description, Explain, layout, ⋯ menu, split/close
+ *   ├ options bar : Pretty | Raw segmented control, mode-specific options
+ *   ├ INPUT panel : label, link chip, counters, Paste · Upload · Sample · Clear, gutter + editor
  *   ├ seam        : draggable (horizontal when stacked, vertical when side-by-side)
- *   └ OUTPUT panel: label, status, Copy · Download, the result (text or rich view)
+ *   └ OUTPUT panel: label, status, Find · Copy · Download · Send on, the result (text or rich view)
  *
  * An empty pane shows a tool picker under the editor instead of the output,
  * so a fresh pane is self-explanatory. A PaneView owns its DOM for the life
@@ -19,32 +19,49 @@ import { VIEWS, type ViewContext } from './views/index.js';
 import { runMode } from './runner.js';
 import { ExplainPanel } from './explain-ui.js';
 import { icon } from './icons.js';
-import { h, toast, copyText } from './ui.js';
+import { h, toast, copyText, menu, type MenuItem } from './ui.js';
 
 /** What a pane needs from the board. Kept minimal so pane.ts stays decoupled. */
 export interface BoardActions {
   addRight(paneId: string): void;
   addBelow(paneId: string): void;
   close(paneId: string): void;
+  duplicate(paneId: string): void;
+  swap(paneId: string, delta: 1 | -1): void;
+  zoom(paneId: string): void;
+  isZoomed(paneId: string): boolean;
   canClose(): boolean;
   /** Something in this pane's persisted state changed. */
   changed(): void;
+  /** This pane produced new output text (pipes listen to this). */
+  outputChanged(paneId: string, text: string): void;
+  otherPanes(paneId: string): { id: string; title: string }[];
+  link(paneId: string, sourceId: string | null): void;
+  /** Open a new pane to the right that keeps reading this pane's output. */
+  sendOn(paneId: string): void;
+  titleOf(paneId: string): string;
+  rename(paneId: string): void;
 }
 
 const DEBOUNCE_MS = 180;
 /** Seam can't be dragged past these so both editor and output stay usable. */
 const SEAM_MIN = 0.1;
 const SEAM_MAX = 0.9;
-
+/** Above this many lines the gutter stops (cheap text measurement only). */
+const GUTTER_MAX_LINES = 20_000;
+const FIND_MAX_MARKS = 2_000;
 
 /** File extension for "Download output" per mode / state. */
 function outputExtension(mode: ToolMode, pretty: boolean, options: Record<string, unknown>): string {
   switch (mode.id) {
-    case 'json': case 'json-tree': case 'json-path': case 'json-graph': case 'jwt': return 'json';
+    case 'json': case 'json-tree': case 'json-path': case 'json-graph': case 'jwt': case 'query-string': return 'json';
     case 'xml': return 'xml';
     case 'yaml': return pretty ? 'yaml' : 'json';
     case 'csv': return 'csv';
     case 'css': return 'css';
+    case 'html': case 'markdown': return 'html';
+    case 'sql': return 'sql';
+    case 'json-to-types': return { typescript: 'ts', zod: 'ts', python: 'py', go: 'go', jsonschema: 'json' }[String(options['target'] ?? 'typescript')] ?? 'txt';
     case 'convert': return typeof options['to'] === 'string' ? (options['to'] as string) : 'txt';
     default: return 'txt';
   }
@@ -52,7 +69,13 @@ function outputExtension(mode: ToolMode, pretty: boolean, options: Record<string
 
 /** Icon-and-label button used across the pane toolbars. */
 function tbtn(iconName: string, label: string, title: string, onClick: () => void, cls = ''): HTMLButtonElement {
-  const b = h<HTMLButtonElement>(`button.btn.tb${cls ? '.' + cls : ''}`, { type: 'button', title }, icon(iconName, 14), h('span', {}, label));
+  const b = h<HTMLButtonElement>(`button.btn.tb${cls ? '.' + cls : ''}`, { type: 'button', title, 'aria-label': label }, icon(iconName, 14), h('span', {}, label));
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function ibtn(iconName: string, title: string, onClick: (e: MouseEvent) => void, cls = ''): HTMLButtonElement {
+  const b = h<HTMLButtonElement>(`button.btn.icon${cls ? '.' + cls : ''}`, { type: 'button', title, 'aria-label': title }, icon(iconName));
   b.addEventListener('click', onClick);
   return b;
 }
@@ -60,6 +83,7 @@ function tbtn(iconName: string, label: string, title: string, onClick: () => voi
 export class PaneView {
   readonly el: HTMLElement;
   private readonly textarea: HTMLTextAreaElement;
+  private readonly gutter: HTMLElement;
   private readonly output: HTMLPreElement;
   private readonly viewHost: HTMLElement;
   private readonly errorBox: HTMLElement;
@@ -74,17 +98,24 @@ export class PaneView {
   private readonly optionsBar: HTMLElement;
   private readonly prettySeg: HTMLElement;
   private readonly layoutBtn: HTMLButtonElement;
+  private readonly zoomBtn: HTMLButtonElement;
   private readonly closeBtn: HTMLButtonElement;
   private readonly modeSelect: HTMLSelectElement;
   private readonly modeIcon: HTMLElement;
+  private readonly titleEl: HTMLElement;
   private readonly descEl: HTMLElement;
   private readonly inputMeta: HTMLElement;
+  private readonly linkChip: HTMLElement;
   private readonly outputLabel: HTMLElement;
+  private readonly findBox: HTMLElement;
+  private readonly findInput: HTMLInputElement;
+  private readonly findCount: HTMLElement;
   private readonly explain: ExplainPanel;
   private runTimer: number | undefined;
   private runSeq = 0;
   private viewCleanup: (() => void) | undefined;
   private lastResult: ModeResult = { output: '' };
+  private findIndex = 0;
 
   constructor(
     readonly node: PaneNode,
@@ -93,35 +124,39 @@ export class PaneView {
     const s = node.state;
 
     // ---- title bar --------------------------------------------------------
+    this.titleEl = h('button.pane-name', { type: 'button', title: 'Rename this pane (double-click)' });
+    this.titleEl.addEventListener('dblclick', () => board.rename(node.id));
+    this.titleEl.addEventListener('click', () => this.textarea.focus());
     this.modeIcon = h('span.mode-icon');
     this.modeSelect = h<HTMLSelectElement>('select.mode-select', { 'aria-label': 'Tool', title: 'Switch tool (Alt+Shift+M)' });
     for (const cat of CATEGORIES) {
       const group = h<HTMLOptGroupElement>('optgroup', { label: cat });
       for (const m of MODES.filter((m) => m.category === cat)) group.append(h('option', { value: m.id }, m.label));
-      this.modeSelect.append(group);
+      if (group.childElementCount) this.modeSelect.append(group);
     }
     this.modeSelect.value = s.mode;
     this.modeSelect.addEventListener('change', () => this.setMode(this.modeSelect.value));
     this.descEl = h('span.mode-desc');
 
-    this.layoutBtn = h<HTMLButtonElement>('button.btn.icon', { type: 'button' });
-    this.layoutBtn.addEventListener('click', () => this.toggleLayout());
+    this.layoutBtn = ibtn('columns', '', () => this.toggleLayout());
+    this.zoomBtn = ibtn('maximize', 'Maximise this pane (Alt+Shift+Enter)', () => board.zoom(node.id));
     const explainBtn = tbtn('bulb', 'Explain', 'What is this input? Local analysis, no server (Alt+Shift+E)', () => this.toggleExplain());
-    const addRightBtn = h('button.btn.icon', { type: 'button', title: 'Add pane to the right (Alt+Shift+R)', 'aria-label': 'Add pane right' }, icon('splitRight'));
-    addRightBtn.addEventListener('click', () => board.addRight(node.id));
-    const addBelowBtn = h('button.btn.icon', { type: 'button', title: 'Add pane below (Alt+Shift+B)', 'aria-label': 'Add pane below' }, icon('splitDown'));
-    addBelowBtn.addEventListener('click', () => board.addBelow(node.id));
-    this.closeBtn = h<HTMLButtonElement>('button.btn.icon.close', { type: 'button', title: 'Close pane (Alt+Shift+W)', 'aria-label': 'Close pane' }, icon('close'));
-    this.closeBtn.addEventListener('click', () => board.close(node.id));
+    const moreBtn = ibtn('settings', 'More pane actions', (e) => this.openMenu(e.currentTarget as HTMLElement));
+    const addRightBtn = ibtn('splitRight', 'Add pane to the right (Alt+Shift+R)', () => board.addRight(node.id));
+    const addBelowBtn = ibtn('splitDown', 'Add pane below (Alt+Shift+B)', () => board.addBelow(node.id));
+    this.closeBtn = ibtn('close', 'Close pane (Alt+Shift+W)', () => board.close(node.id), 'close');
 
     const title = h(
       'header.pane-title',
       {},
-      h('label.mode-picker', {}, this.modeIcon, this.modeSelect),
+      this.titleEl,
+      h('label.mode-picker', {}, this.modeIcon, this.modeSelect, icon('chevronDown', 12)),
       this.descEl,
       h('span.spacer'),
       explainBtn,
       this.layoutBtn,
+      this.zoomBtn,
+      moreBtn,
       h('span.divider'),
       addRightBtn,
       addBelowBtn,
@@ -154,6 +189,7 @@ export class PaneView {
     });
     this.textarea.value = s.input;
     this.textarea.addEventListener('input', () => this.onInput());
+    this.textarea.addEventListener('scroll', () => this.syncGutter());
     this.textarea.addEventListener('keydown', (e) => {
       // Tab inserts a literal tab instead of moving focus — it's an editor.
       if (e.key === 'Tab' && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
@@ -161,18 +197,22 @@ export class PaneView {
         this.insertAtCursor('\t');
       }
     });
+    this.gutter = h('div.gutter', { 'aria-hidden': 'true' });
 
-    const fileInput = h<HTMLInputElement>('input', { type: 'file', hidden: true, accept: '.txt,.json,.xml,.yaml,.yml,.csv,.tsv,.css,.b64,.jwt,text/*,application/json' });
+    const fileInput = h<HTMLInputElement>('input', { type: 'file', hidden: true, accept: '.txt,.json,.xml,.yaml,.yml,.csv,.tsv,.css,.html,.htm,.md,.sql,.b64,.jwt,.log,text/*,application/json' });
     fileInput.addEventListener('change', () => {
       const f = fileInput.files?.[0];
       if (f) void this.loadFile(f);
       fileInput.value = '';
     });
     this.inputMeta = h('span.panel-meta');
+    this.linkChip = h('button.chip.link-chip', { type: 'button', hidden: true, title: 'Input is piped from another pane — click to unlink' });
+    this.linkChip.addEventListener('click', () => board.link(node.id, null));
     const inputHead = h(
       'div.panel-head',
       {},
       h('span.panel-label', {}, 'Input'),
+      this.linkChip,
       this.inputMeta,
       h('span.spacer'),
       tbtn('paste', 'Paste', 'Paste from clipboard', () => void this.pasteFromClipboard()),
@@ -181,7 +221,7 @@ export class PaneView {
       tbtn('clear', 'Clear', 'Clear the input', () => this.clearInput()),
       fileInput,
     );
-    this.inputWrap = h('div.panel.pane-input', {}, inputHead, this.textarea);
+    this.inputWrap = h('div.panel.pane-input', {}, inputHead, h('div.editor-wrap', {}, this.gutter, this.textarea));
 
     // ---- seam --------------------------------------------------------------
     this.seam = h('div.seam.seam-inner', {
@@ -200,14 +240,31 @@ export class PaneView {
     this.notesEl = h('div.notes', { hidden: true });
     this.statusEl = h('span.panel-meta.status');
     this.outputLabel = h('span.panel-label', {}, 'Output');
+    this.findInput = h<HTMLInputElement>('input.find-input', { type: 'search', placeholder: 'Find in output…', 'aria-label': 'Find in output', spellcheck: 'false' });
+    this.findCount = h('span.find-count');
+    this.findInput.addEventListener('input', () => this.applyFind(0));
+    this.findInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.applyFind(e.shiftKey ? -1 : 1);
+      } else if (e.key === 'Escape') {
+        this.toggleFind(false);
+        this.output.focus();
+      }
+    });
+    const findClose = ibtn('close', 'Close find', () => this.toggleFind(false));
+    this.findBox = h('div.find-box', { hidden: true }, icon('find', 13), this.findInput, this.findCount, findClose);
     const outputHead = h(
       'div.panel-head',
       {},
       this.outputLabel,
       this.statusEl,
       h('span.spacer'),
+      this.findBox,
+      ibtn('find', 'Find in output (Alt+Shift+F)', () => this.toggleFind()),
       tbtn('copy', 'Copy', 'Copy output (Alt+Shift+C)', () => void this.copyOutput()),
       tbtn('download', 'Download', 'Save the output as a file', () => this.downloadOutput()),
+      tbtn('pipe', 'Send on', 'Open a new pane that keeps reading this output (a pipe)', () => this.sendOn()),
     );
     this.outputWrap = h('div.panel.pane-output', {}, outputHead, this.errorBox, this.notesEl, this.output, this.viewHost);
 
@@ -223,15 +280,17 @@ export class PaneView {
         this.textarea.focus();
       },
     });
-    this.el = h('section.pane', { 'data-pane-id': node.id, tabindex: '-1' }, title, this.optionsBar, this.body, this.explain.el);
+    this.el = h('section.pane', { 'data-pane-id': node.id, tabindex: '-1', role: 'region' }, title, this.optionsBar, this.body, this.explain.el);
     this.bindDrop();
 
     this.renderControls();
     this.applyLayout();
     this.applySeam();
+    this.applyWrap();
     this.updatePrettyButton();
     this.updateEmptyState();
     this.updateInputMeta();
+    this.refreshLink();
     this.runNow();
   }
 
@@ -245,15 +304,46 @@ export class PaneView {
     return this.lastResult.output;
   }
 
-  focus(): void {
-    this.textarea.focus();
+  get result(): ModeResult {
+    return this.lastResult;
   }
 
-  /** Called by the board when the pane count changes: last pane can't close. */
-  refreshCloseState(): void {
+  focus(): void {
+    this.textarea.focus({ preventScroll: true });
+  }
+
+  /** Called by the board when structure changes: close state, zoom icon, title. */
+  refreshChrome(): void {
     const can = this.board.canClose();
     this.closeBtn.disabled = !can;
     this.closeBtn.title = can ? 'Close pane (Alt+Shift+W)' : 'The last pane cannot be closed';
+    const zoomed = this.board.isZoomed(this.node.id);
+    this.zoomBtn.replaceChildren(icon(zoomed ? 'minimize' : 'maximize'));
+    this.zoomBtn.title = zoomed ? 'Restore all panes (Alt+Shift+Enter)' : 'Maximise this pane (Alt+Shift+Enter)';
+    this.zoomBtn.setAttribute('aria-label', this.zoomBtn.title);
+    this.zoomBtn.hidden = !can && !zoomed;
+  }
+
+  setTitle(text: string): void {
+    this.titleEl.textContent = text;
+    this.el.setAttribute('aria-label', text);
+  }
+
+  /** Reflect the pipe state (chip + read-only editor). */
+  refreshLink(): void {
+    const src = this.node.state.sourceId;
+    this.linkChip.hidden = !src;
+    this.textarea.readOnly = !!src;
+    this.textarea.placeholder = src ? 'Waiting for output from the linked pane…' : 'Paste here, drop a file, or type…';
+    if (src) {
+      this.linkChip.replaceChildren(icon('pipe', 12), h('span', {}, `from ${this.board.titleOf(src)}`), icon('close', 11));
+    }
+  }
+
+  destroy(): void {
+    if (this.runTimer !== undefined) clearTimeout(this.runTimer);
+    this.viewCleanup?.();
+    this.el.remove();
   }
 
   /* ------------------------------------------------------------ actions */
@@ -268,17 +358,24 @@ export class PaneView {
   }
 
   setInput(text: string): void {
+    if (this.textarea.value === text) return;
     this.textarea.value = text;
     this.onInput();
   }
 
   insertSample(): void {
+    if (this.node.state.sourceId) this.board.link(this.node.id, null);
+    if (this.mode.sampleOptions) {
+      Object.assign(this.node.state.options, this.mode.sampleOptions);
+      this.renderControls();
+    }
     this.setInput(this.mode.sample);
     this.textarea.focus();
     toast(`Sample ${this.mode.label} inserted`);
   }
 
   clearInput(): void {
+    if (this.node.state.sourceId) this.board.link(this.node.id, null);
     this.setInput('');
     this.textarea.focus();
   }
@@ -296,8 +393,31 @@ export class PaneView {
     this.board.changed();
   }
 
+  toggleWrap(): void {
+    this.node.state.wrap = !this.node.state.wrap;
+    this.applyWrap();
+    this.board.changed();
+    toast(this.node.state.wrap ? 'Wrapping long lines' : 'Long lines scroll');
+  }
+
   toggleExplain(): void {
     this.explain.toggle();
+  }
+
+  toggleFind(force?: boolean): void {
+    const open = force ?? this.findBox.hidden;
+    this.findBox.hidden = !open;
+    if (open) {
+      this.findInput.focus();
+      this.findInput.select();
+    } else {
+      this.findInput.value = '';
+      this.applyFind(0);
+    }
+  }
+
+  sendOn(): void {
+    this.board.sendOn(this.node.id);
   }
 
   async copyOutput(): Promise<void> {
@@ -319,7 +439,7 @@ export class PaneView {
     const ext = outputExtension(this.mode, s.pretty, s.options);
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    const a = h<HTMLAnchorElement>('a', { href: url, download: `c64-output.${ext}` });
+    const a = h<HTMLAnchorElement>('a', { href: url, download: `c64-${this.mode.id}.${ext}` });
     document.body.append(a);
     a.click();
     a.remove();
@@ -330,6 +450,7 @@ export class PaneView {
     try {
       const text = await navigator.clipboard.readText();
       if (!text) return toast('Clipboard is empty');
+      if (this.node.state.sourceId) this.board.link(this.node.id, null);
       this.setInput(text);
       this.textarea.focus();
     } catch {
@@ -352,17 +473,41 @@ export class PaneView {
       clearTimeout(slow);
       this.el.classList.remove('is-busy');
       if (seq !== this.runSeq) return; // a newer run superseded this one
+      const changed = result.output !== this.lastResult.output;
       this.lastResult = result;
       this.renderResult(result);
+      if (changed) this.board.outputChanged(this.node.id, result.output);
     });
   }
 
   /* ---------------------------------------------------------- internals */
 
+  private openMenu(anchor: HTMLElement): void {
+    const s = this.node.state;
+    const others = this.board.otherPanes(this.node.id);
+    const items: MenuItem[] = [
+      { icon: 'edit', label: 'Rename pane…', run: () => this.board.rename(this.node.id) },
+      { icon: 'duplicate', label: 'Duplicate pane', run: () => this.board.duplicate(this.node.id) },
+      { icon: this.board.isZoomed(this.node.id) ? 'minimize' : 'maximize', label: this.board.isZoomed(this.node.id) ? 'Restore all panes' : 'Maximise pane', keys: 'Alt+Shift+Enter', run: () => this.board.zoom(this.node.id) },
+      { icon: 'wrap', label: s.wrap ? 'Stop wrapping lines' : 'Wrap long lines', run: () => this.toggleWrap() },
+      { sep: true },
+      { icon: 'pipe', label: 'Send output to a new pane', run: () => this.sendOn() },
+      ...(others.length
+        ? [{ icon: 'pipe', label: 'Read input from…', children: others.map((o) => ({ label: o.title, run: () => this.board.link(this.node.id, o.id) })) }]
+        : []),
+      ...(s.sourceId ? [{ icon: 'close', label: 'Unlink input', run: () => this.board.link(this.node.id, null) }] : []),
+      { sep: true },
+      { icon: 'arrowLeft', label: 'Swap with previous pane', run: () => this.board.swap(this.node.id, -1) },
+      { icon: 'arrowRight', label: 'Swap with next pane', run: () => this.board.swap(this.node.id, 1) },
+    ];
+    menu(anchor, items);
+  }
+
   private onInput(): void {
     this.node.state.input = this.textarea.value;
     this.updateEmptyState();
     this.updateInputMeta();
+    this.renderGutter();
     this.board.changed();
     this.explain.refresh();
     if (this.runTimer !== undefined) clearTimeout(this.runTimer);
@@ -377,6 +522,7 @@ export class PaneView {
 
   private async loadFile(f: File): Promise<void> {
     const text = await f.text();
+    if (this.node.state.sourceId) this.board.link(this.node.id, null);
     this.setInput(text);
     toast(`Loaded ${f.name} (${f.size.toLocaleString()} bytes) — stays in your browser`);
   }
@@ -397,6 +543,85 @@ export class PaneView {
     this.inputMeta.textContent = `${t.length.toLocaleString()} chars · ${lines.toLocaleString()} line${lines === 1 ? '' : 's'}`;
   }
 
+  /* ---------------------------------------------------------------- gutter */
+
+  private renderGutter(): void {
+    if (this.node.state.wrap) {
+      this.gutter.hidden = true;
+      return;
+    }
+    const text = this.node.state.input;
+    let n = 1;
+    for (let i = 0; i < text.length && n <= GUTTER_MAX_LINES; i++) if (text.charCodeAt(i) === 10) n++;
+    if (n > GUTTER_MAX_LINES) {
+      this.gutter.hidden = true;
+      return;
+    }
+    this.gutter.hidden = false;
+    const current = this.gutter.childElementCount;
+    if (current < n) {
+      const frag = document.createDocumentFragment();
+      for (let i = current + 1; i <= n; i++) frag.append(h('span', {}, String(i)));
+      this.gutter.append(frag);
+    } else {
+      while (this.gutter.childElementCount > n) this.gutter.lastElementChild!.remove();
+    }
+    this.syncGutter();
+  }
+
+  private syncGutter(): void {
+    this.gutter.style.transform = `translateY(${-this.textarea.scrollTop}px)`;
+  }
+
+  private applyWrap(): void {
+    const wrap = this.node.state.wrap === true;
+    this.textarea.wrap = wrap ? 'soft' : 'off';
+    this.el.classList.toggle('is-wrap', wrap);
+    this.renderGutter();
+  }
+
+  /* ---------------------------------------------------------------- find */
+
+  private applyFind(step: number): void {
+    const q = this.findInput.value;
+    const text = this.lastResult.output;
+    if (!q || !text || this.output.hidden) {
+      this.output.textContent = text;
+      this.findCount.textContent = q && !this.output.hidden ? '0' : '';
+      return;
+    }
+    const lower = text.toLowerCase();
+    const needle = q.toLowerCase();
+    const hits: number[] = [];
+    let i = lower.indexOf(needle);
+    while (i !== -1 && hits.length < FIND_MAX_MARKS) {
+      hits.push(i);
+      i = lower.indexOf(needle, i + needle.length);
+    }
+    if (!hits.length) {
+      this.output.textContent = text;
+      this.findCount.textContent = '0';
+      return;
+    }
+    this.findIndex = ((this.findIndex + step) % hits.length + hits.length) % hits.length;
+    const frag = document.createDocumentFragment();
+    let pos = 0;
+    let currentMark: HTMLElement | null = null;
+    hits.forEach((at, idx) => {
+      frag.append(text.slice(pos, at));
+      const m = h('mark', { class: idx === this.findIndex ? 'is-current' : undefined }, text.slice(at, at + q.length));
+      if (idx === this.findIndex) currentMark = m;
+      frag.append(m);
+      pos = at + q.length;
+    });
+    frag.append(text.slice(pos));
+    this.output.replaceChildren(frag);
+    this.findCount.textContent = `${this.findIndex + 1}/${hits.length}${hits.length >= FIND_MAX_MARKS ? '+' : ''}`;
+    (currentMark as HTMLElement | null)?.scrollIntoView({ block: 'center' });
+  }
+
+  /* ------------------------------------------------------------ controls */
+
   private renderControls(): void {
     this.controlsEl.replaceChildren();
     const s = this.node.state;
@@ -409,6 +634,7 @@ export class PaneView {
           const sel = h<HTMLSelectElement>('select.control', { 'aria-label': c.label, title: c.label });
           for (const o of c.options) sel.append(h('option', { value: o.value }, o.label));
           sel.value = typeof s.options[c.key] === 'string' ? (s.options[c.key] as string) : c.default;
+          if (sel.value !== (s.options[c.key] ?? c.default)) sel.value = c.default;
           sel.addEventListener('change', () => this.setOption(c.key, sel.value));
           this.controlsEl.append(h('label.control-wrap', {}, h('span.control-label', {}, c.label), sel));
           break;
@@ -465,7 +691,7 @@ export class PaneView {
     this.body.classList.toggle('is-side', side);
     this.seam.setAttribute('aria-orientation', side ? 'vertical' : 'horizontal');
     this.layoutBtn.replaceChildren(icon(side ? 'rows' : 'columns'));
-    this.layoutBtn.title = side ? 'Stack input above output' : 'Put input and output side by side';
+    this.layoutBtn.title = side ? 'Stack input above output (Alt+Shift+L)' : 'Put input and output side by side (Alt+Shift+L)';
     this.layoutBtn.setAttribute('aria-label', this.layoutBtn.title);
   }
 
@@ -485,6 +711,7 @@ export class PaneView {
     const grid = h('div.tool-grid');
     for (const cat of CATEGORIES) {
       const tools = MODES.filter((m) => m.category === cat);
+      if (!tools.length) continue;
       const section = h('section.tool-section', {}, h('h4', {}, cat));
       const cards = h('div.tool-cards');
       for (const m of tools) {
@@ -523,16 +750,29 @@ export class PaneView {
         setOption: (key, value) => this.setOption(key, value),
         toast,
       };
-      const cleanup = renderer(this.viewHost, r.view!.data, ctx);
-      if (typeof cleanup === 'function') this.viewCleanup = cleanup;
-      this.viewHost.hidden = false;
-      this.output.hidden = true;
+      try {
+        const cleanup = renderer(this.viewHost, r.view!.data, ctx);
+        if (typeof cleanup === 'function') this.viewCleanup = cleanup;
+        this.viewHost.hidden = false;
+        this.output.hidden = true;
+      } catch (e) {
+        this.viewHost.hidden = true;
+        this.output.hidden = false;
+        this.output.textContent = r.output;
+        r = { ...r, notes: [...(r.notes ?? []), `The rich view failed to render (${(e as Error).message}); showing text instead.`] };
+      }
     } else {
       this.output.textContent = r.output;
       this.output.hidden = !!r.error;
       this.viewHost.hidden = true;
+      if (this.findInput.value) this.applyFind(0);
     }
-    this.outputLabel.textContent = r.view && !r.error ? { 'json-tree': 'Tree', 'json-path': 'Tree & path', 'json-graph': 'Graph', jwt: 'Decoded token', table: 'Table' }[r.view.kind] ?? 'Output' : 'Output';
+    const labels: Record<string, string> = {
+      'json-tree': 'Tree', 'json-path': 'Tree & path', 'json-graph': 'Graph', jwt: 'Decoded token', table: 'Table',
+      url: 'URL breakdown', 'case-all': 'All cases', hash: 'Digests', basen: 'Bases', timestamp: 'Dates', uuid: 'Decoded ids',
+      diff: 'Differences', regex: 'Matches', markdown: 'Preview', stats: 'Statistics', cron: 'Schedule', color: 'Colors',
+    };
+    this.outputLabel.textContent = r.view && !r.error ? labels[r.view.kind] ?? 'Output' : 'Output';
 
     if (r.error) {
       const where = r.error.line ? ` — line ${r.error.line}, col ${r.error.col}` : '';

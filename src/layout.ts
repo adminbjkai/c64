@@ -29,6 +29,12 @@ export interface PaneState {
   layout: 'stacked' | 'side';
   /** Per-mode options (indent, sort keys, …). Free-form, owned by the mode. */
   options: Record<string, unknown>;
+  /** Optional user-given name shown in the pane header and the palette. */
+  title?: string;
+  /** When set, this pane's input mirrors the output of that pane (a pipe). */
+  sourceId?: string;
+  /** Soft-wrap long lines in the editor and text output. */
+  wrap?: boolean;
 }
 
 export interface PaneNode {
@@ -94,6 +100,11 @@ export function allPanes(root: LayoutNode, out: PaneNode[] = []): PaneNode[] {
 
 export function paneCount(root: LayoutNode): number {
   return allPanes(root).length;
+}
+
+/** Deep copy of a subtree (states included) with fresh ids — for duplicating. */
+export function clonePane(node: PaneNode): PaneNode {
+  return createPane({ ...node.state, options: { ...node.state.options } });
 }
 
 /* ------------------------------------------------------------ mutations */
@@ -174,6 +185,19 @@ function collapse(root: LayoutNode, split: SplitNode): LayoutNode {
   return root;
 }
 
+/** Swap two panes in place (their positions and sizes trade). */
+export function swapPanes(root: LayoutNode, a: string, b: string): void {
+  const pa = findParent(root, a);
+  const pb = findParent(root, b);
+  if (!pa || !pb || a === b) return;
+  const ia = pa.children.findIndex((c) => c.id === a);
+  const ib = pb.children.findIndex((c) => c.id === b);
+  const na = pa.children[ia]!;
+  const nb = pb.children[ib]!;
+  pa.children[ia] = nb;
+  pb.children[ib] = na;
+}
+
 /**
  * Resize the seam after child `index` of split `splitId` so that the pair of
  * siblings around it redistributes `delta` (a fraction of the split's
@@ -212,6 +236,9 @@ export function sanitize(node: unknown): LayoutNode | null {
         pretty: s.pretty !== false,
         layout: s.layout === 'side' ? 'side' : 'stacked',
         options: s.options && typeof s.options === 'object' ? { ...s.options } : {},
+        ...(typeof s.title === 'string' && s.title.trim() ? { title: s.title.slice(0, 80) } : {}),
+        ...(typeof s.sourceId === 'string' ? { sourceId: s.sourceId } : {}),
+        ...(s.wrap === true ? { wrap: true } : {}),
       }),
     };
   }

@@ -63,8 +63,10 @@ export interface ToolMode {
   keywords?: string[];
   /** One-line hint shown in an empty pane. */
   emptyHint: string;
-  /** Sample input the "paste sample" button inserts. */
+  /** Sample input the "Sample" button inserts. */
   sample: string;
+  /** Options the "Sample" button sets alongside the sample (e.g. a regex pattern). */
+  sampleOptions?: Record<string, unknown>;
   controls: ModeControl[];
   /** Whether the Raw/Pretty toggle changes anything for this mode. */
   supportsPretty: boolean;

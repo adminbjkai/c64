@@ -18,6 +18,7 @@ export interface ToolMode {
   keywords?: string[];    // extra search terms for the sidebar / palette
   emptyHint: string;      // one line shown in an empty pane
   sample: string;         // the "Sample" button inserts this — must run without error
+  sampleOptions?: {…};    // options the Sample button sets too (e.g. a regex pattern)
   controls: ModeControl[];// header options: select | toggle | text
   supportsPretty: boolean;// does the Pretty / Raw switch change the output?
   run(input, ctx): ModeResult | Promise<ModeResult>;

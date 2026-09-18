@@ -1,15 +1,19 @@
 {
-  "name": "c64-workspace",
-  "version": "0.1.0",
-  "description": "Local-first, dependency-free browser workspace for decoding, formatting and exploring structured text in tileable panes.",
+  "name": "c64",
+  "version": "1.0.0",
+  "description": "Local-first browser workspace for decoding, formatting, converting and inspecting structured text in tileable panes \u2014 JSON, XML, YAML, CSV, Base64, JWT, hashes, diffs, regex, Markdown, SQL and more. Nothing leaves the browser.",
   "private": true,
   "type": "module",
   "scripts": {
+    "prebuild": "node scripts/sync-version.mjs",
     "build": "tsc -p tsconfig.json",
     "watch": "tsc -p tsconfig.json --watch --preserveWatchOutput",
     "start": "npm run build && node server.mjs",
+    "serve": "NODE_ENV=production node server.mjs",
     "dev": "node server.mjs --watch",
-    "test": "npm run build && node --test \"dist/tests/**/*.test.js\""
+    "test": "npm run build && node --test \"dist/tests/**/*.test.js\"",
+    "screenshots": "python3 scripts/screenshots.py",
+    "icons": "python3 scripts/make-icons.py"
   },
   "devDependencies": {
     "@types/node": "^22.20.3",
@@ -17,5 +21,25 @@
   },
   "engines": {
     "node": ">=20"
-  }
+  },
+  "homepage": "https://c64.bjk.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adminbjkai/c64.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "json",
+    "formatter",
+    "base64",
+    "jwt",
+    "yaml",
+    "xml",
+    "csv",
+    "diff",
+    "regex",
+    "developer-tools",
+    "local-first",
+    "pwa"
+  ]
 }

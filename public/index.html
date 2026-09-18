@@ -2,14 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
+  <meta name="description" content="c64 — a local-first workspace for decoding, formatting, converting and inspecting structured text. JSON, XML, YAML, CSV, Base64, JWT, hashes, diffs, regex and more, in tileable panes. Nothing leaves your browser." />
+  <meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f3f4f6" media="(prefers-color-scheme: light)" />
   <!-- Local-only guarantee, enforced by the browser: the page may only load
        its own files and can never make a request carrying user content. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" />
   <title>c64 — local encode / decode / format workspace</title>
   <link rel="stylesheet" href="/public/styles.css" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='1' width='14' height='14' rx='3' fill='%2318a058'/%3E%3Cpath d='M8 3v10M3 8h10' stroke='white' stroke-width='2'/%3E%3C/svg%3E" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="modulepreload" href="/dist/src/main.js" />
 </head>
 <body>
   <div class="app">
@@ -27,27 +33,26 @@
         <kbd>Alt⇧K</kbd>
       </label>
       <nav class="tool-nav" id="tool-nav" aria-label="Tool list"></nav>
-      <div class="sidebar-foot">
-        <div class="local-badge" title="All parsing and formatting happens in this tab. No request ever carries your content.">
-          <span class="dot" aria-hidden="true"></span> Runs entirely in your browser
-        </div>
-      </div>
     </aside>
+    <div class="scrim" id="scrim" aria-hidden="true"></div>
 
     <div class="main">
       <header class="topbar">
         <button id="sidebar-toggle" class="btn icon" type="button" title="Show / hide the tool list" aria-label="Toggle sidebar" aria-expanded="true"></button>
-        <span class="topbar-title">Workspace</span>
-        <span class="topbar-hint">Add panes to compare, convert or decode side by side. Everything is saved locally.</span>
+        <button id="board-menu" class="btn tb board-btn" type="button" title="Boards: switch, create, export, import, share" aria-haspopup="menu"></button>
+        <span class="topbar-hint">Tile panes to compare, convert, decode or chain tools. Everything is saved locally.</span>
         <span class="spacer"></span>
         <button id="add-right" class="btn tb" type="button" title="Add a pane to the right of the active one (Alt+Shift+R)"></button>
         <button id="add-below" class="btn tb" type="button" title="Add a pane below the active one (Alt+Shift+B)"></button>
         <span class="divider"></span>
+        <button id="palette-toggle" class="btn tb" type="button" title="Command palette (⌘/Ctrl+K)"></button>
         <button id="help-toggle" class="btn tb" type="button" aria-expanded="false" aria-controls="help" title="Keyboard shortcuts (Alt+Shift+/)"></button>
         <button id="theme-toggle" class="btn icon" type="button" title="Toggle dark / light (Alt+Shift+T)" aria-label="Toggle theme"></button>
       </header>
 
       <main id="board" class="board" aria-label="Workspace board"></main>
+
+      <footer id="statusbar" class="statusbar" aria-label="Status"></footer>
     </div>
   </div>
 

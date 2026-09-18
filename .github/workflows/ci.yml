@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  test:
+    name: Build & test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Docs are in sync with the registries
+        run: |
+          node scripts/gen-docs.mjs
+          git diff --exit-code -- docs/modes.md docs/shortcuts.md
+      - name: Server smoke test
+        run: |
+          NODE_ENV=production PORT=8166 node server.mjs & sleep 1
+          curl -fsS http://127.0.0.1:8166/healthz
+          curl -fsSI http://127.0.0.1:8166/ | grep -i 'content-security-policy'
+          curl -fsSI http://127.0.0.1:8166/sw.js | grep -i 'service-worker-allowed'
+
+  release:
+    name: GitHub release
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci && npm run build
+      - name: Package
+        run: |
+          tar -czf c64-${GITHUB_REF_NAME}.tar.gz package.json package-lock.json server.mjs public dist/src deploy README.md LICENSE
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: c64-*.tar.gz
+          generate_release_notes: true
