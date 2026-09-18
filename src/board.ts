@@ -141,7 +141,7 @@ export class Board {
   addPiped(sourceId: string): void {
     const src = findPane(this.root, sourceId);
     if (!src) return;
-    const node = createPane({ mode: 'json', layout: src.state.layout, sourceId });
+    const node = createPane({ mode: 'json', layout: src.state.layout, sourceId, fresh: false });
     this.add(sourceId, 'row', node);
     const v = this.views.get(sourceId);
     if (v) this.views.get(node.id)?.setInput(v.outputText);

@@ -35,6 +35,12 @@ export interface PaneState {
   sourceId?: string;
   /** Soft-wrap long lines in the editor and text output. */
   wrap?: boolean;
+  /**
+   * True until the user has chosen a tool, typed/pasted/loaded input, or
+   * linked a pipe. A fresh empty pane shows the tool grid; a non-fresh empty
+   * pane shows the mode's hint with Sample / Paste / Upload actions.
+   */
+  fresh?: boolean;
 }
 
 export interface PaneNode {
@@ -64,7 +70,7 @@ export function newId(prefix: string): string {
 }
 
 export function defaultPaneState(overrides: Partial<PaneState> = {}): PaneState {
-  return { mode: 'json', input: '', seam: 0.5, pretty: true, layout: 'stacked', options: {}, ...overrides };
+  return { mode: 'json', input: '', seam: 0.5, pretty: true, layout: 'stacked', options: {}, fresh: true, ...overrides };
 }
 
 export function createPane(state: Partial<PaneState> = {}): PaneNode {
@@ -104,7 +110,7 @@ export function paneCount(root: LayoutNode): number {
 
 /** Deep copy of a subtree (states included) with fresh ids — for duplicating. */
 export function clonePane(node: PaneNode): PaneNode {
-  return createPane({ ...node.state, options: { ...node.state.options } });
+  return createPane({ ...node.state, options: { ...node.state.options }, fresh: false });
 }
 
 /* ------------------------------------------------------------ mutations */
@@ -226,12 +232,14 @@ export function sanitize(node: unknown): LayoutNode | null {
   if (n.type === 'pane') {
     if (typeof n.id !== 'string') return null;
     const s: Partial<PaneState> = n.state ?? {};
+    const mode = typeof s.mode === 'string' ? s.mode : 'json';
+    const input = typeof s.input === 'string' ? s.input : '';
     return {
       type: 'pane',
       id: n.id,
       state: defaultPaneState({
-        mode: typeof s.mode === 'string' ? s.mode : 'json',
-        input: typeof s.input === 'string' ? s.input : '',
+        mode,
+        input,
         seam: clamp01(typeof s.seam === 'number' ? s.seam : 0.5),
         pretty: s.pretty !== false,
         layout: s.layout === 'side' ? 'side' : 'stacked',
@@ -239,6 +247,8 @@ export function sanitize(node: unknown): LayoutNode | null {
         ...(typeof s.title === 'string' && s.title.trim() ? { title: s.title.slice(0, 80) } : {}),
         ...(typeof s.sourceId === 'string' ? { sourceId: s.sourceId } : {}),
         ...(s.wrap === true ? { wrap: true } : {}),
+        // Legacy records (no `fresh`) are fresh only if never touched at all.
+        fresh: typeof s.fresh === 'boolean' ? s.fresh : input === '' && mode === 'json',
       }),
     };
   }

@@ -9,6 +9,8 @@ import {
   allPanes,
   paneCount,
   findParent,
+  clonePane,
+  defaultPaneState,
   MIN_FRACTION,
   type LayoutNode,
   type SplitNode,
@@ -149,6 +151,28 @@ test('sanitize repairs bad sizes and drops garbage, returns null for junk', () =
   // single surviving child collapses to that child
   const lone = sanitize({ type: 'split', id: 's', dir: 'col', children: [{ type: 'pane', id: 'p' }] });
   assert.equal(lone?.type, 'pane');
+});
+
+test('fresh: new panes are fresh, clones are not', () => {
+  assert.equal(defaultPaneState().fresh, true);
+  assert.equal(createPane({ mode: 'jwt' }).state.fresh, true);
+  assert.equal(defaultPaneState({ fresh: false }).fresh, false);
+  const a = createPane({ input: 'x' });
+  assert.equal(clonePane(a).state.fresh, false);
+  a.state.fresh = true;
+  assert.equal(clonePane(a).state.fresh, false);
+});
+
+test('sanitize keeps fresh and infers it for legacy records', () => {
+  const p = (state: Record<string, unknown>) => (sanitize({ type: 'pane', id: 'p', state }) as { state: { fresh?: boolean } }).state.fresh;
+  assert.equal(p({ fresh: true, input: 'x' }), true);
+  assert.equal(p({ fresh: false, input: '' }), false);
+  assert.equal(p({ fresh: 'yes' }), true); // non-boolean falls back to inference (empty json)
+  // legacy: untouched empty JSON pane is fresh; anything else was set up
+  assert.equal(p({ mode: 'json', input: '' }), true);
+  assert.equal(p({}), true);
+  assert.equal(p({ mode: 'jwt', input: '' }), false);
+  assert.equal(p({ mode: 'json', input: '{}' }), false);
 });
 
 test('findParent locates the immediate split', () => {

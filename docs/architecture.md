@@ -37,7 +37,9 @@ docs/                    this folder
 1. The **board** is a tree of `SplitNode`s (row / column, sizes summing to 1)
    and `PaneNode`s. Every pane holds its own `PaneState`: mode id, input text,
    options, Pretty/Raw, layout, seam position, optional title, optional
-   `sourceId` (pipe) and wrap flag.
+   `sourceId` (pipe), wrap flag and a `fresh` flag (true until a tool is
+   picked, input arrives or a pipe is linked — it decides which empty state
+   the pane shows: the tool grid, or the mode's hint with Sample/Paste/Upload).
 2. Typing in a pane debounces (180 ms) then calls `runMode(modeId, input, ctx)`.
    Inputs under 150 000 characters run on the main thread; larger ones are
    posted to the Web Worker so the UI never freezes. A "working" bar appears

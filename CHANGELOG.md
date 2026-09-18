@@ -6,6 +6,15 @@ All notable changes to c64 are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Empty panes no longer ask twice. A brand-new pane shows "Pick a tool" with
+  the tool grid (and a "Not sure? Try a … sample" button underneath); once a
+  tool is chosen — from the sidebar, the header dropdown, the palette or the
+  grid — the grid gives way to the tool's hint with Try a sample / Paste /
+  Upload. Picking a tool in the sidebar now flashes the target pane's title
+  bar, scrolls it into view and, with several panes open, names the pane it
+  changed; Enter in the sidebar search clears the box after picking.
+
 ## [1.0.0] — 2026-09-18
 
 First public release, live at <https://c64.bjk.ai>.

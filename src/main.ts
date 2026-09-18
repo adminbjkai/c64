@@ -191,6 +191,17 @@ function pickTool(id: string): void {
   pane.setMode(id);
   pane.focus();
   highlightActiveTool();
+  // Make the switch visible: flash the pane's title bar, bring it into view,
+  // and name the target pane when there is more than one to confuse.
+  const bar = pane.el.querySelector<HTMLElement>('.pane-title');
+  if (bar) {
+    bar.classList.remove('flash');
+    void bar.offsetWidth;
+    bar.classList.add('flash');
+    setTimeout(() => bar.classList.remove('flash'), 600);
+  }
+  pane.el.scrollIntoView({ block: 'nearest' });
+  if (board.panes.length >= 2) toast(`${board.titleOf(pane.node.id)} → ${pane.mode.label}`);
   if (matchMedia('(max-width: 900px)').matches) setSidebar(false);
 }
 
@@ -234,6 +245,8 @@ search.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     const first = nav.querySelector<HTMLButtonElement>('.nav-item:not([hidden])');
     if (first) pickTool(first.dataset['mode']!);
+    search.value = '';
+    filterTools();
   } else if (e.key === 'Escape') {
     search.value = '';
     filterTools();

@@ -264,7 +264,7 @@ body.dragging-col, body.dragging-col * { cursor: row-resize !important; }
 }
 .pane-title > .btn, .pane-title > .divider { flex: none; }
 /* Narrow panes shed the least important chrome first (container queries). */
-@container (max-width: 700px) { .pane .mode-desc { display: none; } }
+@container (max-width: 700px) { .pane .mode-desc { display: none; } .pane .tool-desc { display: none; } }
 @container (max-width: 560px) { .pane-title .btn.tb span { display: none; } .pane-title .btn.tb { padding: 0 6px; } .panel-head .btn.tb span { display: none; } }
 @container (max-width: 460px) { .pane-title .btn.icon:not(.close):not(.zoom-btn):not(.more-btn) { display: none; } .pane-title .divider { display: none; } .pane-name { max-width: 90px; } .mode-select { max-width: 150px; } }
 @container (max-width: 360px) { .pane-title .zoom-btn { display: none; } }
@@ -340,6 +340,7 @@ body.dragging-col, body.dragging-col * { cursor: row-resize !important; }
 .editor:read-only { color: var(--text-muted); }
 @keyframes flash { from { box-shadow: inset 0 0 0 2px var(--accent); } to { box-shadow: none; } }
 .pane-input.flash { animation: flash 700ms ease-out; }
+.pane-title.flash { animation: flash 600ms ease-out; }
 
 .output {
   flex: 1; min-height: 0; margin: 0; padding: 10px 12px; overflow: auto;
@@ -377,9 +378,12 @@ body.dragging-col, body.dragging-col * { cursor: row-resize !important; }
 
 .picker { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 18px; border-top: 1px solid var(--border); background: var(--surface-2); }
 .picker[hidden] { display: none; }
-.picker-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.picker-hint { margin: 0; flex: 1; min-width: 200px; color: var(--text); font-size: 13px; }
-.picker-lead { margin: 16px 0 8px; color: var(--text-muted); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.picker-fresh[hidden], .picker-ready[hidden] { display: none; }
+.picker-hint { margin: 0 0 10px; color: var(--text); font-size: 13px; }
+.picker-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.picker-actions .muted { font-size: 12px; }
+.picker-lead { margin: 0 0 8px; color: var(--text-muted); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.picker-foot { margin: 16px 0 0; font-size: 12px; }
 .tool-section h4 { margin: 12px 0 6px; font-size: 11.5px; color: var(--text-muted); font-weight: 600; }
 .tool-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 8px; }
 .tool-card {

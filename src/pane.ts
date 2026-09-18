@@ -90,6 +90,7 @@ export class PaneView {
   private readonly statusEl: HTMLElement;
   private readonly notesEl: HTMLElement;
   private readonly picker: HTMLElement;
+  private readonly fileInput: HTMLInputElement;
   private readonly inputWrap: HTMLElement;
   private readonly outputWrap: HTMLElement;
   private readonly body: HTMLElement;
@@ -205,6 +206,7 @@ export class PaneView {
       if (f) void this.loadFile(f);
       fileInput.value = '';
     });
+    this.fileInput = fileInput;
     this.inputMeta = h('span.panel-meta');
     this.linkChip = h('button.chip.link-chip', { type: 'button', hidden: true, title: 'Input is piped from another pane — click to unlink' });
     this.linkChip.addEventListener('click', () => board.link(node.id, null));
@@ -337,7 +339,16 @@ export class PaneView {
     this.textarea.placeholder = src ? 'Waiting for output from the linked pane…' : 'Paste here, drop a file, or type…';
     if (src) {
       this.linkChip.replaceChildren(icon('pipe', 12), h('span', {}, `from ${this.board.titleOf(src)}`), icon('close', 11));
+      this.markUsed();
     }
+  }
+
+  /** The pane has been deliberately set up (tool, input or pipe) — no more tool grid. */
+  private markUsed(): void {
+    if (this.node.state.fresh === false) return;
+    this.node.state.fresh = false;
+    this.updateEmptyState();
+    this.board.changed();
   }
 
   destroy(): void {
@@ -350,6 +361,7 @@ export class PaneView {
 
   setMode(id: string): void {
     this.node.state.mode = id;
+    this.node.state.fresh = false;
     this.modeSelect.value = id;
     this.renderControls();
     this.updateEmptyState();
@@ -358,6 +370,7 @@ export class PaneView {
   }
 
   setInput(text: string): void {
+    this.markUsed();
     if (this.textarea.value === text) return;
     this.textarea.value = text;
     this.onInput();
@@ -505,6 +518,7 @@ export class PaneView {
 
   private onInput(): void {
     this.node.state.input = this.textarea.value;
+    if (this.node.state.input !== '') this.node.state.fresh = false;
     this.updateEmptyState();
     this.updateInputMeta();
     this.renderGutter();
@@ -697,16 +711,28 @@ export class PaneView {
 
   private updateEmptyState(): void {
     const empty = this.node.state.input === '';
+    const fresh = this.node.state.fresh !== false;
     this.body.classList.toggle('is-empty', empty);
     this.picker.hidden = !empty;
+    const freshEl = this.picker.querySelector<HTMLElement>('.picker-fresh');
+    const readyEl = this.picker.querySelector<HTMLElement>('.picker-ready');
+    if (freshEl) freshEl.hidden = !fresh;
+    if (readyEl) readyEl.hidden = fresh;
     const hint = this.picker.querySelector<HTMLElement>('.picker-hint');
     if (hint) hint.textContent = this.mode.emptyHint;
+    const sampleLabel = this.picker.querySelector<HTMLElement>('.picker-sample-label');
+    if (sampleLabel) sampleLabel.textContent = `Not sure? Try a ${this.mode.label} sample`;
     for (const card of this.picker.querySelectorAll<HTMLElement>('.tool-card')) {
       card.classList.toggle('is-current', card.dataset['mode'] === this.node.state.mode);
     }
   }
 
-  /** The "what do you want to do?" grid shown while the pane is empty. */
+  /**
+   * Empty-state under the editor. Two faces, one at a time:
+   *   .picker-fresh — the tool grid, for a pane nobody has set up yet;
+   *   .picker-ready — the mode's hint + Sample / Paste / Upload, once a tool
+   *                   was chosen (so the user is not asked "which tool?" twice).
+   */
   private buildPicker(): HTMLElement {
     const grid = h('div.tool-grid');
     for (const cat of CATEGORIES) {
@@ -725,10 +751,23 @@ export class PaneView {
       section.append(cards);
       grid.append(section);
     }
+    const gridSample = h('button.btn.small.picker-sample-label', { type: 'button' });
+    gridSample.addEventListener('click', () => this.insertSample());
+    const fresh = h('div.picker-fresh', {}, h('p.picker-lead', {}, 'Pick a tool'), grid, h('p.picker-foot.muted', {}, gridSample));
+
     const sampleBtn = h('button.btn.primary', { type: 'button' }, icon('sparkle', 14), h('span', {}, 'Try a sample'));
     sampleBtn.addEventListener('click', () => this.insertSample());
-    const hintRow = h('div.picker-top', {}, h('p.picker-hint'), sampleBtn);
-    return h('div.picker', { hidden: true }, hintRow, h('p.picker-lead', {}, 'Or pick a tool for this pane'), grid);
+    const pasteBtn = h('button.btn.small', { type: 'button', title: 'Paste from clipboard' }, icon('paste', 13), h('span', {}, 'Paste'));
+    pasteBtn.addEventListener('click', () => void this.pasteFromClipboard());
+    const uploadBtn = h('button.btn.small', { type: 'button', title: 'Open a local file — it never leaves your browser' }, icon('upload', 13), h('span', {}, 'Upload'));
+    uploadBtn.addEventListener('click', () => this.fileInput.click());
+    const ready = h(
+      'div.picker-ready',
+      { hidden: true },
+      h('p.picker-hint'),
+      h('div.picker-actions', {}, sampleBtn, pasteBtn, uploadBtn, h('span.muted', {}, 'or drop a file here')),
+    );
+    return h('div.picker', { hidden: true }, fresh, ready);
   }
 
   private renderResult(r: ModeResult): void {
