@@ -81,7 +81,7 @@ export const base64Mode: ToolMode = {
   description: 'Encode text to Base64 or decode it back — standard or URL-safe.',
   category: 'Encoding',
   icon: 'base64',
-  emptyHint: 'Paste text to encode, or Base64 to decode (auto-detected). Upload a file with the Input panel's Upload button.',
+  emptyHint: 'Paste text to encode, or Base64 to decode (auto-detected). Upload a file with the Input panel’s Upload button.',
   sample: 'eyJzZXJ2aWNlIjoiYXBpIiwidmVyc2lvbiI6MywiaGVhbHRoeSI6dHJ1ZX0=',
   supportsPretty: true,
   controls: [
