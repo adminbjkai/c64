@@ -37,7 +37,7 @@
 | R2-6 | Lane 3 Generators: qr-code, totp, lorem, string-utils, math-eval | tests green | ✅ | 55 tests; RFC 4226/6238 vectors |
 | R2-7 | Lane 4 Utilities: unit-convert, ip-subnet, html-to-markdown, data-url, chmod | tests green | ✅ | 73 tests |
 | R2-8 | Shell: highlighting, favourites/recent, info panel, swap, data-URL uploads | browser check | ✅ | 24 hl spans, favourites section, no errors (screenshot) |
-| R2-9 | Register + style all lanes, docs/README/CHANGELOG, screenshots, v1.1.0 release, deploy | verifier PASS, CI green, live | 🔶 | 674/674, SMOKE OK 53 tools, healthz 1.1.0 live, tag pushed; verifier running |
+| R2-9 | Register + style all lanes, docs/README/CHANGELOG, screenshots, v1.1.0 release, deploy | verifier PASS, CI green, live | ✅ | verifier PASS (3 minor gaps fixed in v1.1.1: plus icon, Text Diff category, stale comment); CI success main + v1.1.0; release asset c64-v1.1.0.tar.gz; live healthz 1.1.x |
 
 ## Decisions log
 - Keep zero runtime deps and no bundler (auditability is the product's point). Hash mode uses WebCrypto (async) → `run` may return a Promise. (2026-09-18)

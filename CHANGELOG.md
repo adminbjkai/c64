@@ -6,6 +6,13 @@ All notable changes to c64 are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.1.1] — 2026-09-19
+
+### Fixed
+- "New board" showed the wrong icon (missing `plus` glyph).
+- Text Diff is listed under Compare, matching the README and its A / B editors.
+- Rich-views paragraph in `docs/modes.md` covers the v1.1 views.
+
 ## [1.1.0] — 2026-09-19
 
 Planned against what IT-Tools, DevToys, CyberChef, JSON Crack and the JSON
@@ -100,7 +107,8 @@ Initial workspace: JSON format/validate, tree, path and graph views, XML,
 YAML, CSV/TSV, Convert, Base64, JWT decode, Minify/Prettify and CSS, in
 tileable panes with a Web Worker for large inputs and an Explain helper.
 
-[Unreleased]: https://github.com/adminbjkai/c64/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/adminbjkai/c64/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/adminbjkai/c64/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/adminbjkai/c64/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/adminbjkai/c64/releases/tag/v1.0.0
 [0.1.0]: https://github.com/adminbjkai/c64/commit/a2b5f36
