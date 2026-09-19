@@ -5,7 +5,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent
-A, B = (20, 160, 106), (47, 214, 161)  # accent gradient, top-left → bottom-right
+A, B = (74, 91, 216), (139, 151, 255)  # accent gradient, top-left → bottom-right
 
 
 def render(size: int, maskable: bool) -> Image.Image:

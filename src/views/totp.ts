@@ -1,12 +1,13 @@
 /**
  * TOTP renderer: big current code (click to copy), a countdown bar that
  * ticks every second and asks the pane to re-run the mode when the period
- * rolls over, muted previous/next codes, and the otpauth URL.
+ * rolls over, then the neighbouring codes and settings as copyable rows.
  */
 
 import { h } from '../ui.js';
 import type { TotpData } from '../modes/totp.js';
 import type { ViewRenderer } from './types.js';
+import { viewShell, section, kvTable, copyable, badge, muted, facts, type KvRow } from './ui.js';
 
 export function groupCode(code: string): string {
   if (code.length === 6) return `${code.slice(0, 3)} ${code.slice(3)}`;
@@ -16,8 +17,9 @@ export function groupCode(code: string): string {
 
 export const renderTotp: ViewRenderer = (host, raw, ctx) => {
   const d = raw as TotpData;
-  const code = h('button.totp-code', { type: 'button', title: 'Copy code' }, groupCode(d.code));
-  code.addEventListener('click', () => ctx.copy(d.code, 'code'));
+  const totp = d.mode === 'totp';
+  const code = copyable(d.code, { label: 'code', display: groupCode(d.code) });
+  code.classList.add('totp-code');
 
   const remainingEl = h('span.totp-remaining', {}, `${d.remaining}s`);
   const fill = h('div.totp-ring-fill');
@@ -30,23 +32,21 @@ export const renderTotp: ViewRenderer = (host, raw, ctx) => {
   };
   setProgress(d.remaining);
 
-  const copyUrl = h('button.btn.small', { type: 'button' }, 'Copy');
-  copyUrl.addEventListener('click', () => ctx.copy(d.url, 'otpauth URL'));
+  const rows: KvRow[] = [
+    { label: totp ? 'Previous code' : 'Counter − 1', value: groupCode(d.prev), copy: d.prev },
+    { label: totp ? 'Next code' : 'Counter + 1', value: groupCode(d.next), copy: d.next },
+    { label: 'Algorithm', value: d.algorithm, copy: false },
+    { label: 'Digits', value: String(d.digits), copy: false },
+    totp ? { label: 'Period', value: `${d.period} s`, copy: false } : { label: 'Counter', value: String(d.counter), copy: false },
+  ];
+  if (d.issuer) rows.push({ label: 'Issuer', value: d.issuer });
+  if (d.account) rows.push({ label: 'Account', value: d.account });
+  rows.push({ label: 'otpauth URL', value: d.url });
 
-  host.append(
-    h('div.totp-head', {}, h('span.badge.muted', {}, d.mode.toUpperCase()), h('span.muted', {}, ` · ${d.algorithm} · ${d.digits} digits${d.mode === 'totp' ? ` · ${d.period} s` : ` · counter ${d.counter}`}${d.issuer ? ` · ${d.issuer}` : ''}${d.account ? ` (${d.account})` : ''}`)),
-    code,
-    h('div.totp-timer', { hidden: d.mode !== 'totp' }, ring, remainingEl),
-    h(
-      'div.totp-neighbours',
-      {},
-      h('span.totp-neighbour.muted', {}, `${d.mode === 'totp' ? 'previous' : 'counter − 1'}: `, h('code', {}, groupCode(d.prev))),
-      h('span.totp-neighbour.muted', {}, `${d.mode === 'totp' ? 'next' : 'counter + 1'}: `, h('code', {}, groupCode(d.next))),
-    ),
-    h('div.totp-url', {}, h('code.totp-url-text', {}, d.url), copyUrl),
-  );
+  const { body } = viewShell(host, { status: [badge('neutral', d.mode.toUpperCase()), muted(facts(d.algorithm, `${d.digits} digits`, totp ? `${d.period} s` : `counter ${d.counter}`))] });
+  body.append(h('div.totp-head', {}, code, h('div.totp-timer', { hidden: !totp }, ring, remainingEl)), section('Details', {}, kvTable(rows)));
 
-  if (d.mode !== 'totp') return;
+  if (!totp) return;
   // Count down from the reference time the mode used; re-run when the period rolls over.
   const startedAt = Date.now();
   let lastWindow = Math.floor(d.now / 1000 / d.period);

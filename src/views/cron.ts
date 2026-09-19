@@ -6,30 +6,47 @@
 import { h } from '../ui.js';
 import type { CronData } from '../modes/cron.js';
 import type { ViewRenderer } from './types.js';
+import { viewShell, section, dataTable, emptyState, copyable, badge, muted } from './ui.js';
 
-export const renderCron: ViewRenderer = (host, raw, ctx) => {
+export const renderCron: ViewRenderer = (host, raw) => {
   const d = raw as CronData;
+  const { body } = viewShell(host);
 
-  const copyDesc = h('button.btn.small', { type: 'button' }, 'Copy');
-  copyDesc.addEventListener('click', () => ctx.copy(d.description, 'description'));
-  host.append(
-    h('div.cron-head', {}, h('code.cron-expr', {}, d.expression), d.macro ? h('span.badge.muted', {}, `${d.macro} macro`) : null),
-    h('div.cron-desc', {}, h('span.cron-desc-text', {}, d.description), copyDesc),
+  const sentence = copyable(d.description, { label: 'description' });
+  sentence.classList.add('cron-sentence');
+  body.append(
+    section(
+      'Schedule',
+      { meta: h('span', {}, h('code', {}, d.expression), d.macro ? badge('neutral', `${d.macro} macro`) : null) },
+      sentence,
+      d.fields.length
+        ? dataTable(
+            [
+              { key: 'field', label: 'Field' },
+              { key: 'value', label: 'Value', mono: true },
+              { key: 'meaning', label: 'Meaning', wrap: true },
+            ],
+            d.fields.map((f) => ({ field: { text: f.field, copy: false }, value: f.value, meaning: { text: f.meaning, copy: false } })),
+          )
+        : null,
+    ),
   );
 
-  if (d.fields.length) {
-    const body = h('tbody');
-    for (const f of d.fields) body.append(h('tr', {}, h('td.cron-field', {}, f.field), h('td', {}, h('code', {}, f.value)), h('td.cron-meaning', {}, f.meaning)));
-    host.append(h('div.table-wrap', {}, h('table.csv-table.cron-table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Field'), h('th', {}, 'Value'), h('th', {}, 'Meaning'))), body)));
-  }
-
-  const runsHead = h('div.cron-runs-head', {}, h('h3', {}, d.runs.length ? `Next ${d.runs.length} runs` : 'Next runs'), h('span.muted', {}, ` · ${d.timeZone}`));
-  const list = h('ol.cron-runs');
-  for (const r of d.runs) {
-    const copy = h('button.btn.small', { type: 'button', title: r.iso }, 'Copy ISO');
-    copy.addEventListener('click', () => ctx.copy(r.iso, 'timestamp'));
-    list.append(h('li.cron-run', {}, h('code.cron-run-time', {}, r.local), h('span.cron-run-rel.muted', {}, r.relative), copy));
-  }
-  if (!d.runs.length) list.append(h('li.cron-run.muted', {}, d.macro === '@reboot' ? 'Runs once at scheduler start; no calendar schedule.' : 'No matching time in the next 5 years.'));
-  host.append(runsHead, list);
+  body.append(
+    section(
+      d.runs.length ? `Next ${d.runs.length} runs` : 'Next runs',
+      { meta: muted(d.timeZone) },
+      d.runs.length
+        ? dataTable(
+            [
+              { key: 'local', label: 'Local time', mono: true },
+              { key: 'relative', label: 'Relative' },
+              { key: 'iso', label: 'ISO 8601', mono: true },
+            ],
+            d.runs.map((r) => ({ local: r.local, relative: { text: r.relative, copy: false }, iso: r.iso })),
+            { rowNum: true },
+          )
+        : emptyState(d.macro === '@reboot' ? 'Runs once when the scheduler starts, so there is no calendar schedule.' : 'No matching time in the next 5 years.'),
+    ),
+  );
 };

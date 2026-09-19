@@ -8,7 +8,7 @@ framework and no runtime dependency, which keeps the whole build auditable.
 
 ```
 server.mjs               zero-dependency static server (+ /healthz, gzip/brotli, ETag, CSP)
-public/                  index.html, styles.css, PWA files (manifest, sw.js, icons)
+public/                  index.html, styles.css, fonts/ (JetBrains Mono, latin subset), PWA files (manifest, sw.js, icons)
 src/main.ts              entry: theme + prefs, boards, sidebar, top/status bars, palette, shortcuts, SW
 src/layout.ts            pure tiling-tree model (add / remove / swap / resize / sanitize)
 src/board.ts             renders the tree to DOM; seams, zoom, pipes, undo-close
@@ -62,6 +62,24 @@ docs/                    this folder
    `sourceId` points at it — that is a **pipe**. Cycles are refused.
 5. Every change persists (debounced) to `localStorage` under the boards file
    (`c64.boards.v1`). Several named boards coexist; one is current.
+
+## Design system
+
+`public/styles.css` starts with the token block: colours (`--bg`, `--surface`,
+`--surface-2`, `--ink`, `--muted`, `--line`, `--line-strong`, one `--accent`
+— Commodore indigo — plus `--ok` / `--warn` / `--danger` / `--info` for state),
+spacing `--s1…--s5`, radii `--r-ctl` / `--r-pane` / `--r-sheet`, motion
+`--t-fast` / `--t-ui`, and chrome heights `--h-topbar`, `--h-title`,
+`--h-options`, `--h-head`, `--h-status`. The dark theme overrides only the
+colours. Older names (`--text`, `--border`, `--radius`, `--sidebar-*`, …) are
+kept as aliases of the new tokens so views migrate gradually.
+
+Content (editors, results, tool names, numbers) is set in JetBrains Mono, a
+self-hosted variable font: `public/fonts/JetBrainsMono[wght]-latin.woff2` and
+the italic, subset to Latin + punctuation + arrows + box drawing with
+`pyftsubset` (about 105 KB together, OFL licence in `public/fonts/LICENSE.txt`).
+Chrome uses the system sans stack; there is no web sans. `font-feature-settings`
+turns on the slashed zero and turns ligatures off.
 
 ## Privacy model
 

@@ -1,21 +1,27 @@
 /**
  * Case renderer: every case variant of the first line in one table, each
- * row with a copy button.
+ * value copyable.
  */
 
 import { h } from '../ui.js';
 import type { CaseAllData } from '../modes/case.js';
 import type { ViewRenderer } from './types.js';
+import { viewShell, section, dataTable } from './ui.js';
 
-export const renderCaseAll: ViewRenderer = (host, raw, ctx) => {
+export const renderCaseAll: ViewRenderer = (host, raw) => {
   const d = raw as CaseAllData;
-  const body = h('tbody');
-  for (const v of d.variants) {
-    const copy = h('button.btn.small', { type: 'button' }, 'Copy');
-    copy.addEventListener('click', () => ctx.copy(v.value, v.name));
-    body.append(h('tr', {}, h('td.case-name', {}, v.name), h('td.case-value', {}, h('code', {}, v.value)), h('td.case-actions', {}, copy)));
-  }
-  host.append(
-    h('section.case-section', {}, h('header', {}, h('h3', {}, 'All variants'), h('span.muted', {}, ' of '), h('code', {}, d.source)), h('div.table-wrap', {}, h('table.case-table', {}, body))),
+  const { body } = viewShell(host);
+  body.append(
+    section(
+      'All variants',
+      { meta: h('span', {}, 'of ', h('code', {}, d.source)) },
+      dataTable(
+        [
+          { key: 'name', label: 'Case' },
+          { key: 'value', label: 'Value', mono: true, wrap: true },
+        ],
+        d.variants.map((v) => ({ name: { text: v.name, copy: false }, value: v.value })),
+      ),
+    ),
   );
 };

@@ -1,9 +1,9 @@
 /**
  * Structural diff renderer (JSON / XML / YAML Compare, JSON Patch preview).
  *
- * Summary bar: count badges, filter chips per change kind, "N of M" with
- * Prev / Next (keyboard n / p while the view is focused) and a side-by-side
- * ↔ inline toggle. Below it, one table row per pointer path. Side-by-side
+ * Bar: count badges, badge-toned filter toggles per change kind, "N of M"
+ * with Prev / Next (keyboard n / p while the view is focused) and a
+ * side-by-side / inline toggle. Below it, one table row per pointer path. Side-by-side
  * shows the Original and Changed values in two columns; inline shows a single
  * `old → new` column. Rows are classed sd-add / sd-del / sd-chg / sd-type /
  * sd-move / sd-eq.
@@ -17,6 +17,7 @@
 import { h } from '../ui.js';
 import type { AlignNode, AlignStatus, Change, DiffSummary } from '../lib/structural-diff.js';
 import type { ViewRenderer } from './types.js';
+import { viewShell, badge, emptyState, type Tone } from './ui.js';
 
 export interface StructDiffData {
   left: unknown;
@@ -31,12 +32,12 @@ export interface StructDiffData {
 
 const ROW_CAP = 5000;
 const STATUS_CLASS: Record<AlignStatus, string> = { eq: 'sd-eq', add: 'sd-add', del: 'sd-del', chg: 'sd-chg', type: 'sd-type', move: 'sd-move' };
-const CHIPS: { status: AlignStatus; label: string }[] = [
-  { status: 'add', label: 'added' },
-  { status: 'del', label: 'removed' },
-  { status: 'chg', label: 'changed' },
-  { status: 'type', label: 'type' },
-  { status: 'move', label: 'moved' },
+const CHIPS: { status: AlignStatus; label: string; tone: Tone | 'kw' }[] = [
+  { status: 'add', label: 'added', tone: 'ok' },
+  { status: 'del', label: 'removed', tone: 'danger' },
+  { status: 'chg', label: 'changed', tone: 'warn' },
+  { status: 'type', label: 'type', tone: 'kw' },
+  { status: 'move', label: 'moved', tone: 'info' },
 ];
 
 const isContainer = (v: unknown): v is object => v !== null && typeof v === 'object';
@@ -86,18 +87,11 @@ export const renderStructDiff: ViewRenderer = (host, raw, ctx) => {
 
   /* -------------------------------------------------------------- bar */
   const s = d.summary;
-  const badges = h(
-    'span.sd-badges',
-    {},
-    h('span.badge.ok', {}, `+${s.added}`),
-    h('span.badge.bad', {}, `−${s.removed}`),
-    h('span.badge.warn', {}, `~${s.changed}`),
-    s.typeChanges ? h('span.badge', {}, `${s.typeChanges} type`) : null,
-    s.moved ? h('span.badge', {}, `${s.moved} moved`) : null,
-  );
-  const chips = h('span.sd-chips');
+  const n = (v: number) => v.toLocaleString('en-US');
+  const badges = [badge('ok', `+${n(s.added)}`), badge('danger', `−${n(s.removed)}`), badge('warn', `~${n(s.changed)}`), s.typeChanges ? badge('neutral', `${n(s.typeChanges)} type`) : null, s.moved ? badge('neutral', `${n(s.moved)} moved`) : null];
+  const chips = h('span.sd-chips', { role: 'group', 'aria-label': 'Show changes of kind' });
   for (const c of CHIPS) {
-    const el = h('button.sd-chip.is-on', { type: 'button', 'data-status': c.status, 'aria-pressed': 'true' }, c.label);
+    const el = h(`button.v-badge.is-${c.tone}.is-toggle.is-on`, { type: 'button', 'data-status': c.status, 'aria-pressed': 'true' }, c.label);
     el.addEventListener('click', () => {
       if (filters.has(c.status)) filters.delete(c.status);
       else filters.add(c.status);
@@ -110,11 +104,10 @@ export const renderStructDiff: ViewRenderer = (host, raw, ctx) => {
   const navCount = h('span.sd-nav-count', {}, '');
   const prev = h<HTMLButtonElement>('button.btn.small', { type: 'button', title: 'Previous change (p)' }, 'Prev');
   const next = h<HTMLButtonElement>('button.btn.small', { type: 'button', title: 'Next change (n)' }, 'Next');
-  const layout = h('button.btn.small', { type: 'button' }, 'Inline view');
-  const bar = h('div.sd-bar', {}, badges, chips, h('span.sd-nav', {}, navCount, prev, next), layout);
+  const layout = h('button.btn.small', { type: 'button' }, 'Inline');
 
   /* ------------------------------------------------------------ table */
-  const wrap = h('div.table-wrap.sd-wrap');
+  const wrap = h('div.v-table-wrap.sd-wrap');
   let tbody: HTMLElement = h('tbody');
 
   const makeRow = (node: AlignNode, depth: number, expandable: boolean, expanded: boolean): HTMLTableRowElement => {
@@ -222,9 +215,9 @@ export const renderStructDiff: ViewRenderer = (host, raw, ctx) => {
     rowCount = 0;
     capped = false;
     current = -1;
-    const table = h('table.csv-table.sd-table');
+    const table = h('table.v-table.is-sticky.sd-table');
     table.append(
-      h('thead', {}, inline ? h('tr', {}, h('th', {}, 'Path'), h('th', {}, `${labelA} → ${labelB}`)) : h('tr', {}, h('th', {}, 'Path'), h('th', {}, labelA), h('th', {}, labelB))),
+      h('thead', {}, inline ? h('tr', {}, h('th', {}, 'Path'), h('th', {}, `${labelA} to ${labelB}`)) : h('tr', {}, h('th', {}, 'Path'), h('th', {}, labelA), h('th', {}, labelB))),
     );
     tbody = h('tbody');
     const rows: HTMLTableRowElement[] = [];
@@ -239,10 +232,10 @@ export const renderStructDiff: ViewRenderer = (host, raw, ctx) => {
       rowCount++;
     }
     tbody.append(...rows);
-    if (capped) tbody.append(h('tr.sd-notice', {}, h('td', { colspan: inline ? '2' : '3' }, `Showing the first ${ROW_CAP} rows — narrow the comparison to see more.`)));
+    if (capped) tbody.append(h('tr.sd-notice', {}, h('td', { colspan: inline ? '2' : '3' }, `Showing the first ${ROW_CAP.toLocaleString('en-US')} rows. Narrow the comparison to see more.`)));
     table.append(tbody);
     wrap.replaceChildren(table);
-    layout.textContent = inline ? 'Side by side' : 'Inline view';
+    layout.textContent = inline ? 'Side by side' : 'Inline';
     applyFilters();
   };
 
@@ -293,8 +286,8 @@ export const renderStructDiff: ViewRenderer = (host, raw, ctx) => {
     }
   });
   draw();
-  root.append(bar);
-  if (d.changes.length === 0) root.append(h('div.sd-identical.muted', {}, 'No differences'));
+  const { body } = viewShell(host, { status: badges, actions: [chips, h('span.sd-nav', {}, navCount, prev, next), layout], flush: true, column: true });
+  if (d.changes.length === 0) root.append(emptyState('No differences. A and B are structurally identical.'));
   root.append(wrap);
-  host.append(root);
+  body.append(root);
 };

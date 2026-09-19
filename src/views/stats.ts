@@ -1,62 +1,58 @@
 /**
- * Text statistics renderer: a grid of stat tiles, a top-words table with
- * inline bars, and a character-class breakdown.
+ * Text statistics renderer: a grid of compact stat cards, a top-words table
+ * with inline bars, and a character-class breakdown.
  */
 
 import { h } from '../ui.js';
 import type { TextStats } from '../modes/text-stats.js';
 import { formatMinutes } from '../modes/text-stats.js';
 import type { ViewRenderer } from './types.js';
+import { viewShell, section, cardList, dataTable, emptyState, type Card } from './ui.js';
 
-const tile = (value: string, label: string) => h('div.stat-tile', {}, h('div.stat-value', {}, value), h('div.stat-label', {}, label));
+const stat = (value: string, label: string): Card => ({ body: h('div.v-stat', {}, h('div.v-stat-n', {}, value), h('div.v-stat-l', {}, label)) });
+const n = (v: number) => v.toLocaleString('en-US');
 
 export const renderStats: ViewRenderer = (host, raw) => {
   const s = raw as TextStats;
-  const grid = h(
-    'div.stat-grid',
-    {},
-    tile(String(s.words), 'words'),
-    tile(String(s.characters), 'characters'),
-    tile(String(s.charactersNoSpaces), 'chars, no spaces'),
-    tile(String(s.bytes), 'bytes (UTF-8)'),
-    tile(String(s.uniqueWords), 'unique words'),
-    tile(String(s.sentences), 'sentences'),
-    tile(String(s.paragraphs), 'paragraphs'),
-    tile(String(s.lines), 'lines'),
-    tile(s.avgWordLength.toFixed(1), 'avg word length'),
-    tile(s.avgSentenceLength.toFixed(1), 'avg words / sentence'),
-    tile(formatMinutes(s.readingMinutes), 'reading (200 wpm)'),
-    tile(formatMinutes(s.speakingMinutes), 'speaking (130 wpm)'),
+  const grid = cardList(
+    [
+      stat(n(s.words), 'words'),
+      stat(n(s.characters), 'characters'),
+      stat(n(s.charactersNoSpaces), 'characters, no spaces'),
+      stat(n(s.bytes), 'bytes (UTF-8)'),
+      stat(n(s.uniqueWords), 'unique words'),
+      stat(n(s.sentences), 'sentences'),
+      stat(n(s.paragraphs), 'paragraphs'),
+      stat(n(s.lines), 'lines'),
+      stat(s.avgWordLength.toFixed(1), 'average word length'),
+      stat(s.avgSentenceLength.toFixed(1), 'words per sentence'),
+      stat(formatMinutes(s.readingMinutes), 'reading at 200 wpm'),
+      stat(formatMinutes(s.speakingMinutes), 'speaking at 130 wpm'),
+    ],
+    { compact: true },
   );
 
   const max = s.topWords[0]?.count ?? 1;
-  const body = h('tbody');
-  s.topWords.forEach((t, i) => {
-    body.append(
-      h(
-        'tr',
-        {},
-        h('td.rownum', {}, String(i + 1)),
-        h('td', {}, h('code', {}, t.word)),
-        h('td', {}, String(t.count)),
-        h('td.stat-bar-cell', {}, h('span.stat-bar', { style: `width:${Math.round((t.count / max) * 100)}%` })),
-      ),
-    );
-  });
-  const top = h('table.csv-table.stat-words', {}, h('thead', {}, h('tr', {}, h('th.rownum', {}, '#'), h('th', {}, 'Word'), h('th', {}, 'Count'), h('th', {}, ''))), body);
-
-  const c = s.classes;
-  const total = Math.max(1, s.characters);
-  const cls = h('table.csv-table.stat-classes', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Class'), h('th', {}, 'Count'), h('th', {}, '%'))));
-  const cbody = h('tbody');
-  for (const [k, v] of Object.entries(c)) cbody.append(h('tr', {}, h('td', {}, k), h('td', {}, String(v)), h('td', {}, `${((v / total) * 100).toFixed(1)}%`)));
-  cls.append(cbody);
-
-  host.append(
-    grid,
-    h('h3.stat-heading', {}, 'Top words'),
-    s.topWords.length ? h('div.table-wrap', {}, top) : h('p.muted', {}, 'No words.'),
-    h('h3.stat-heading', {}, 'Character classes'),
-    h('div.table-wrap', {}, cls),
+  const top = dataTable(
+    [
+      { key: 'word', label: 'Word', mono: true },
+      { key: 'count', label: 'Count', numeric: true },
+      { key: 'bar', label: '', cls: 'stat-bar-cell' },
+    ],
+    s.topWords.map((t) => ({ word: t.word, count: { text: n(t.count), copy: false }, bar: h('span.stat-bar', { style: `width:${Math.round((t.count / max) * 100)}%` }) })),
+    { rowNum: true },
   );
+
+  const total = Math.max(1, s.characters);
+  const classes = dataTable(
+    [
+      { key: 'cls', label: 'Class' },
+      { key: 'count', label: 'Count', numeric: true },
+      { key: 'share', label: 'Share', numeric: true },
+    ],
+    Object.entries(s.classes).map(([k, v]) => ({ cls: { text: k, copy: false }, count: { text: n(v), copy: false }, share: { text: `${((v / total) * 100).toFixed(1)}%`, copy: false } })),
+  );
+
+  const { body } = viewShell(host);
+  body.append(grid, section('Top words', {}, s.topWords.length ? top : emptyState('No words yet.')), section('Character classes', {}, classes));
 };

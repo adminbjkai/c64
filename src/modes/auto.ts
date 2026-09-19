@@ -19,7 +19,7 @@ export function runAuto(input: string, ctx: RunContext): ModeResult {
 export const autoMode: ToolMode = {
   id: 'auto',
   label: 'Auto detect',
-  description: 'Paste anything — c64 recognises the format and picks the right tool.',
+  description: 'Paste anything. c64 picks the tool.',
   category: 'Start',
   icon: 'sparkle',
   keywords: ['detect', 'start', 'any', 'paste'],

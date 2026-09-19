@@ -40,7 +40,7 @@ def main():
 
             assert page.locator(".pane.is-active .mode-select").input_value() == "auto", "a fresh pane starts in Auto detect"
             assert page.locator(".pane.is-active .start-chips:not([hidden])").count() == 1, "start chips under the empty Auto editor"
-            assert page.locator(".pane.is-active .run-btn").inner_text() == "Detect & run"
+            assert page.locator(".pane.is-active .run-btn").inner_text() == "Detect"
 
             # Every tool: clear (back to Auto), pick via sidebar, click the empty-state
             # "Try a sample" button, expect no error box. Auto has no sample button:
@@ -55,7 +55,7 @@ def main():
                 if mode == "auto":
                     page.fill(".pane.is-active textarea >> nth=0", '{"service":"api","healthy":true}')
                 else:
-                    page.click(".pane.is-active .picker-ready button:has-text('Try a sample')")
+                    page.click(".pane.is-active .picker-ready button:has-text('Insert a sample')")
                 page.wait_for_timeout(350)
                 err = page.locator(".pane.is-active .error:not([hidden])")
                 if err.count():
@@ -81,7 +81,7 @@ def main():
             # Pipe: base64-decode a sample, send on, downstream pane gets the output.
             page.click(".pane.is-active .panel-head button:has-text('Clear')")
             page.click('.nav-item[data-mode="base64"]')
-            page.click(".pane.is-active .picker-ready button:has-text('Try a sample')")
+            page.click(".pane.is-active .picker-ready button:has-text('Insert a sample')")
             page.wait_for_timeout(300)
             src_out = page.locator(".pane.is-active .output").inner_text()
             page.keyboard.press("Alt+Shift+N")

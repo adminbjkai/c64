@@ -49,8 +49,8 @@ test('collapseFromDepth picks containers with children at or below a depth', () 
 });
 
 test('describeNode and prettyRaw', () => {
-  assert.equal(describeNode(g.nodes[0]!), 'object · 3 keys');
-  assert.equal(describeNode(byLabel('items')), 'array · 2 items');
+  assert.equal(describeNode(g.nodes[0]!), 'object, 3 keys');
+  assert.equal(describeNode(byLabel('items')), 'array, 2 items');
   assert.equal(describeNode(buildGraph('x').nodes[0]!), 'string');
   assert.equal(describeNode(buildGraph(4).nodes[0]!), 'number');
   assert.equal(prettyRaw('{"a":[1,2]}'), '{\n  "a": [\n    1,\n    2\n  ]\n}');

@@ -1,64 +1,57 @@
 /**
- * JWT renderer: colour-coded token segments, header + claims tables,
- * validity badge, and the permanent "signature not verified" notice.
+ * JWT renderer: validity badges in the bar, colour-coded token segments,
+ * then header, claims and signature sections. The "decoded, not verified"
+ * notice is permanent.
  */
 
 import { h } from '../ui.js';
 import type { JwtData } from '../modes/jwt.js';
 import type { ViewRenderer } from './types.js';
+import { viewShell, section, kvTable, badge, note, copyButton, type KvRow, type Tone } from './ui.js';
 
-export const renderJwt: ViewRenderer = (host, raw, ctx) => {
+export const renderJwt: ViewRenderer = (host, raw) => {
   const d = raw as JwtData;
-
-  const notice = h(
-    'div.jwt-notice',
-    { role: 'note' },
-    h('strong', {}, 'Decoded, not verified. '),
-    `The signature (${d.alg}) cannot be checked without the issuer's key, which this tool never has or fetches. Treat every claim below as unverified.`,
-  );
-
-  const badge = {
+  const status: Record<JwtData['status'], [Tone, string]> = {
     'valid-window': ['ok', 'Within validity window'],
-    expired: ['bad', 'Expired'],
+    expired: ['danger', 'Expired'],
     'not-yet-valid': ['warn', 'Not yet valid'],
-    'no-exp': ['muted', 'No expiry claim'],
-  }[d.status];
-
-  const segs = h(
-    'div.jwt-segments',
-    {},
-    h('span.jwt-h', { title: 'Header' }, d.segments[0]),
-    h('span.jwt-dot', {}, '.'),
-    h('span.jwt-p', { title: 'Payload' }, d.segments[1]),
-    h('span.jwt-dot', {}, '.'),
-    h('span.jwt-s', { title: 'Signature (not verified)' }, d.segments[2] || '(empty)'),
-  );
-
-  const table = (title: string, cls: string, rows: { name: string; value: unknown; meaning?: string; human?: string; warn?: string }[], copyText: string) => {
-    const copy = h('button.btn.small', { type: 'button' }, 'Copy JSON');
-    copy.addEventListener('click', () => ctx.copy(copyText, title.toLowerCase()));
-    const body = h('tbody');
-    for (const r of rows) {
-      const val = typeof r.value === 'string' ? r.value : JSON.stringify(r.value);
-      body.append(
-        h(
-          'tr',
-          { class: r.warn ? 'is-warn' : undefined },
-          h('td.jwt-claim', {}, h('code', {}, r.name), r.meaning ? h('span.jwt-meaning', {}, r.meaning) : null),
-          h('td.jwt-value', {}, h('code', {}, val), r.human ? h('div.jwt-human', {}, r.human) : null, r.warn ? h('div.jwt-warn', {}, r.warn) : null),
-        ),
-      );
-    }
-    return h('section.jwt-section', {}, h('header', {}, h(`h3.${cls}`, {}, title), copy), h('table.jwt-table', {}, body));
+    'no-exp': ['neutral', 'No expiry claim'],
   };
+  const [tone, text] = status[d.status];
+  const typ = d.header['typ'];
+  const kid = d.header['kid'];
 
-  host.append(
-    notice,
-    h('div.jwt-status', {}, h(`span.badge.${badge[0]}`, {}, badge[1]), h('span.muted', {}, ` · alg ${d.alg}${d.header['typ'] ? ` · typ ${String(d.header['typ'])}` : ''}${d.header['kid'] ? ` · kid ${String(d.header['kid'])}` : ''}`)),
-    ...d.warnings.map((w) => h('div.notes', {}, '· ' + w)),
-    segs,
-    table('Header', 'jwt-h', Object.entries(d.header).map(([name, value]) => ({ name, value })), JSON.stringify(d.header, null, 2)),
-    table('Payload (claims)', 'jwt-p', d.claims, JSON.stringify(d.payload, null, 2)),
-    h('section.jwt-section', {}, h('header', {}, h('h3.jwt-s', {}, 'Signature')), h('code.jwt-sig', {}, d.signature || '(empty)'), h('p.muted', {}, 'Shown as-is. Verification requires the signing key and is intentionally not performed.')),
+  const { body } = viewShell(host, {
+    status: [badge(tone, text), badge('neutral', `alg ${d.alg}`), typ ? badge('neutral', `typ ${String(typ)}`) : null, kid ? badge('neutral', `kid ${String(kid)}`) : null],
+  });
+
+  const stringify = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v));
+  const headerRows: KvRow[] = Object.entries(d.header).map(([name, value]) => ({ label: h('code', {}, name), value: stringify(value) }));
+  const claimRows: KvRow[] = d.claims.map((r) => ({
+    label: h('span', {}, h('code', {}, r.name), r.meaning ? h('span.jwt-meaning', {}, r.meaning) : null),
+    value: stringify(r.value),
+    note: r.warn || r.human ? h('span', {}, r.human ? h('span', {}, r.human) : null, r.warn ? h('span.jwt-warn', {}, r.warn) : null) : undefined,
+    tone: r.warn ? 'warn' : undefined,
+  }));
+
+  body.append(
+    note('warn', h('strong', {}, 'Decoded, not verified. '), `The signature (${d.alg}) cannot be checked without the issuer's key, which this tool never has or fetches. Treat every claim below as unverified.`),
+    ...d.warnings.map((w) => note('warn', w)),
+    h(
+      'div.jwt-segments',
+      {},
+      h('span.jwt-h', { title: 'Header' }, d.segments[0]),
+      h('span.jwt-dot', {}, '.'),
+      h('span.jwt-p', { title: 'Payload' }, d.segments[1]),
+      h('span.jwt-dot', {}, '.'),
+      h('span.jwt-s', { title: 'Signature (not verified)' }, d.segments[2] || '(empty)'),
+    ),
+    section(h('span.jwt-h', {}, 'Header'), { actions: [copyButton('Copy JSON', () => JSON.stringify(d.header, null, 2))] }, kvTable(headerRows)),
+    section(h('span.jwt-p', {}, 'Claims'), { actions: [copyButton('Copy JSON', () => JSON.stringify(d.payload, null, 2))] }, kvTable(claimRows)),
+    section(
+      h('span.jwt-s', {}, 'Signature'),
+      { meta: 'shown as-is, never verified' },
+      kvTable([{ label: 'signature', value: d.signature || 'empty', copy: d.signature ? d.signature : false }]),
+    ),
   );
 };

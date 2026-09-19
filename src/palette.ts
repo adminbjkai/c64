@@ -22,6 +22,43 @@ export interface Command {
 
 const RECENT_KEY = 'c64.palette.recent';
 const MAX_RESULTS = 60;
+/** Fixed section order; each header prints once because rows are grouped after ranking. */
+const GROUP_ORDER = ['Recent', 'Favourite tools', 'Switch tool', 'Pane', 'Go to pane', 'Boards', 'Workspace'];
+const groupRank = (g: string) => {
+  const i = GROUP_ORDER.indexOf(g);
+  return i === -1 ? GROUP_ORDER.length : i;
+};
+
+let current: Palette | null = null;
+
+/** Close the open palette, if any. Returns true when one was open. */
+export function closePalette(): boolean {
+  if (!current?.isOpen) return false;
+  current.close();
+  return true;
+}
+
+/**
+ * Rank rows (recent first when there is no query, score otherwise), cap the
+ * list, then stable-sort into the fixed group order. Exported for tests.
+ */
+export function arrangeCommands<T extends { group: string; id: string }>(
+  rows: T[],
+  query: string,
+  recent: readonly string[],
+): { c: T; group: string }[] {
+  const q = query.trim();
+  const top = rows.slice(0, MAX_RESULTS);
+  const entries = top.map((c, i) => ({ c, group: !q && recent.includes(c.id) && i < 5 ? 'Recent' : c.group }));
+  if (!q) return entries.sort((a, b) => groupRank(a.group) - groupRank(b.group));
+  // With a query, `rows` arrive ranked by score. Groups are ordered by their
+  // best-ranked member so the top match stays first, and each header prints once.
+  const firstIndex = new Map<string, number>();
+  entries.forEach((e, i) => {
+    if (!firstIndex.has(e.group)) firstIndex.set(e.group, i);
+  });
+  return entries.sort((a, b) => firstIndex.get(a.group)! - firstIndex.get(b.group)! || 0);
+}
 
 /** Subsequence match with a score favouring word starts and contiguity. */
 export function fuzzyScore(query: string, text: string): number {
@@ -49,6 +86,7 @@ export class Palette {
   private readonly list: HTMLElement;
   private commands: Command[] = [];
   private shown: Command[] = [];
+  private groups: string[] = [];
   private selected = 0;
   private recent: string[] = [];
 
@@ -61,6 +99,7 @@ export class Palette {
       h('div.palette', { role: 'dialog', 'aria-label': 'Command palette' }, h('div.palette-head', {}, icon('command', 16), this.input, h('kbd', {}, 'Esc')), this.list, h('div.palette-foot', {}, h('span', {}, h('kbd', {}, '↑↓'), ' move'), h('span', {}, h('kbd', {}, '↵'), ' run'), h('span.spacer'), h('span.muted', {}, 'Everything runs locally'))),
     );
     document.body.append(this.el);
+    current = this;
     this.el.addEventListener('pointerdown', (e) => {
       if (e.target === this.el) this.close();
     });
@@ -117,7 +156,9 @@ export class Palette {
         .filter((r) => r.s > 0)
         .sort((a, b) => b.s - a.s);
     }
-    this.shown = rows.slice(0, MAX_RESULTS).map((r) => r.c);
+    const arranged = arrangeCommands(rows.map((r) => r.c), q, this.recent);
+    this.shown = arranged.map((r) => r.c);
+    this.groups = arranged.map((r) => r.group);
     this.selected = 0;
     this.renderList(q);
   }
@@ -130,7 +171,7 @@ export class Palette {
     }
     let lastGroup = '';
     this.shown.forEach((c, i) => {
-      const group = !q && this.recent.includes(c.id) && i < 5 ? 'Recent' : c.group;
+      const group = this.groups[i] ?? c.group;
       if (group !== lastGroup) {
         this.list.append(h('div.palette-group', {}, group));
         lastGroup = group;

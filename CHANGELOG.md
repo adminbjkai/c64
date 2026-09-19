@@ -6,6 +6,38 @@ All notable changes to c64 are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-09-19
+
+A design system, applied everywhere. The editor and the result are the work;
+everything else became a hairline.
+
+### Changed
+- **Design system.** New token set (warm neutral surfaces, Commodore-indigo
+  accent, state colours reserved for state), self-hosted JetBrains Mono for all
+  content, system sans for chrome. Sidebar on the board's own surface (224 px,
+  brand row only, active tool marked by a 2 px accent rule); 40 px top bar;
+  24 px status bar ("● Local", pane count, active pane status; the GitHub
+  link moved to the palette's "About c64"). Panes lose their shadows and get
+  a 32 px title with a grab handle on multi-pane boards, a single scrolling
+  36 px options row whose extra options fold into a popover, 28 px Input /
+  Result heads with "408 chars, 28 lines" meta and "● Verdict — facts"
+  status, labelled A / B columns ("A · Original", "B · Changed") with Swap,
+  a 40 px gutter and a busy state that keeps the previous result at 60 %.
+  Error cards read message / "line N, col M" / hint with a "Jump to it"
+  affordance. Start chips are outlined; "Detect" and "Insert a sample"
+  replace "Detect & run" and "Try a sample". PWA icons and theme colours
+  follow the new accent.
+- **Interaction**: drag a pane by its grip onto any edge of another pane to
+  reorder; a Text / Tree / Table switch on JSON results; copying confirms
+  inline on the control instead of a toast; one consistent Escape chain
+  (find → panels → menus → back to the editor); palette groups print once with
+  the best match first.
+- **Rich views** rebuilt on one primitive set (`src/views/ui.ts`: shell,
+  section, key/value table, data table, cards, badges, empty state, copyable
+  values). Every value is click-to-copy; per-cell Copy buttons are gone.
+- Tools without options keep their action button in the input head instead
+  of an empty options row.
+
 ## [1.2.1] — 2026-09-19
 
 ### Fixed
@@ -151,7 +183,8 @@ Initial workspace: JSON format/validate, tree, path and graph views, XML,
 YAML, CSV/TSV, Convert, Base64, JWT decode, Minify/Prettify and CSS, in
 tileable panes with a Web Worker for large inputs and an Explain helper.
 
-[Unreleased]: https://github.com/adminbjkai/c64/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/adminbjkai/c64/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/adminbjkai/c64/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/adminbjkai/c64/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/adminbjkai/c64/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/adminbjkai/c64/compare/v1.1.0...v1.1.1

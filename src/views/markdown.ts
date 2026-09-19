@@ -9,6 +9,7 @@ import { h } from '../ui.js';
 import type { MarkdownData } from '../modes/markdown.js';
 import { SAFE_TAGS, SAFE_ATTRS, safeHref, safeSrc } from '../lib/markdown.js';
 import type { ViewRenderer } from './types.js';
+import { viewShell } from './ui.js';
 
 const TAGS = new Set<string>(SAFE_TAGS);
 const ATTRS = new Set<string>(SAFE_ATTRS);
@@ -47,6 +48,7 @@ export const renderMarkdown: ViewRenderer = (host, raw) => {
   const preview = h('div.md-preview');
   preview.innerHTML = d.html;
   sanitizeTree(preview);
-  host.append(preview);
-  if (d.showHtml) host.append(h('pre.md-source', {}, d.html));
+  const { body } = viewShell(host, { flush: true, column: true });
+  body.append(preview);
+  if (d.showHtml) body.append(h('pre.md-source', {}, d.html));
 };

@@ -11,6 +11,7 @@ import { h } from '../ui.js';
 import { pathKey } from '../modes/json-parse.js';
 import { formatPath } from '../lib/jsonpath.js';
 import type { ViewContext, ViewRenderer } from './types.js';
+import { viewShell, copyInline } from './ui.js';
 
 export type Segs = (string | number)[];
 
@@ -83,7 +84,6 @@ export const renderJsonTree: ViewRenderer = (host, raw, ctx) => {
   /* ------------------------------------------------------------ toolbar */
   const expandAll = h('button.btn.small', { type: 'button', title: 'Expand every node (capped for huge documents)' }, 'Expand all');
   const collapseAll = h('button.btn.small', { type: 'button' }, 'Collapse all');
-  const toolbar = h('div.view-toolbar', {}, expandAll, collapseAll);
 
   let pathBar: HTMLElement | null = null;
   let pathText: HTMLElement | null = null;
@@ -92,7 +92,7 @@ export const renderJsonTree: ViewRenderer = (host, raw, ctx) => {
     const styleBtn = h('button.btn.small', { type: 'button', title: 'Toggle $.a.b[0] / $[\'a\'][\'b\'][0]' }, style === 'dot' ? 'dot' : 'bracket');
     styleBtn.addEventListener('click', () => ctx.setOption('pathStyle', style === 'dot' ? 'bracket' : 'dot'));
     const copyPath = h('button.btn.small', { type: 'button' }, 'Copy path');
-    copyPath.addEventListener('click', () => ctx.copy(pathText!.textContent ?? '', 'path'));
+    copyPath.addEventListener('click', () => copyInline(copyPath, pathText!.textContent ?? ''));
     pathBar = h('div.path-bar', {}, h('span.label', {}, 'Path'), pathText, styleBtn, copyPath);
   }
 
@@ -135,12 +135,12 @@ export const renderJsonTree: ViewRenderer = (host, raw, ctx) => {
     const copyVal = h('button.tn-act', { type: 'button', title: 'Copy value (c)' }, 'copy');
     copyVal.addEventListener('click', (e) => {
       e.stopPropagation();
-      ctx.copy(container ? JSON.stringify(value, null, 2) : typeof value === 'string' ? value : JSON.stringify(value), 'value');
+      copyInline(copyVal, container ? JSON.stringify(value, null, 2) : typeof value === 'string' ? value : JSON.stringify(value));
     });
     const copyPath = h('button.tn-act', { type: 'button', title: 'Copy path (p)' }, 'path');
     copyPath.addEventListener('click', (e) => {
       e.stopPropagation();
-      ctx.copy(formatPath(segs, style), 'path');
+      copyInline(copyPath, formatPath(segs, style));
     });
     row.append(h('span.tn-actions', {}, copyVal, copyPath));
     wrap.append(row);
@@ -222,7 +222,7 @@ export const renderJsonTree: ViewRenderer = (host, raw, ctx) => {
       for (const c of Array.from(el.children)) walk(c);
     };
     walk(tree);
-    if (on && count > EXPAND_ALL_CAP) ctx.toast(`Expanded the first ${EXPAND_ALL_CAP} nodes — expand deeper branches individually`);
+    if (on && count > EXPAND_ALL_CAP) ctx.toast(`Expanded the first ${EXPAND_ALL_CAP.toLocaleString('en-US')} nodes. Expand deeper branches individually.`);
   };
   expandAll.addEventListener('click', () => setAll(true));
   collapseAll.addEventListener('click', () => {
@@ -267,17 +267,17 @@ export const renderJsonTree: ViewRenderer = (host, raw, ctx) => {
         item.addEventListener('click', () => reveal(m.path));
         list.append(item);
       }
-      if (p.matches.length > shown.length) list.append(h('div.path-count', {}, `… ${p.matches.length - shown.length} more not listed`));
+      if (p.matches.length > shown.length) list.append(h('div.path-count', {}, `${(p.matches.length - shown.length).toLocaleString('en-US')} more not listed`));
       results.append(list);
     } else {
       results.append(h('div.path-count', {}, 'Click any node to see its path. Type a JSONPath query above, e.g. ', h('code', {}, '$..name'), ' or ', h('code', {}, '$.items[?(@.price > 10)]')));
     }
   }
 
-  host.append(toolbar);
-  if (pathBar) host.append(pathBar);
-  if (results) host.append(results);
-  host.append(tree);
+  const { body } = viewShell(host, { actions: [expandAll, collapseAll], flush: true, column: true });
+  if (pathBar) body.append(pathBar);
+  if (results) body.append(results);
+  body.append(tree);
 
   // Restore the previously selected node (survives re-runs while typing).
   const remembered = (pathMode ? data.path!.selected : undefined) ?? (ctx.options['selectedPath'] as Segs | undefined);

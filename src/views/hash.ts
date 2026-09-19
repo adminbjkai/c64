@@ -1,32 +1,35 @@
 /**
- * Hash renderer: one row per algorithm with the digest and a copy button.
+ * Hash renderer: a bar with what was hashed, then one row per algorithm
+ * with its (copyable) digest.
  */
 
 import { h } from '../ui.js';
 import type { HashData } from '../modes/hash.js';
 import type { ViewRenderer } from './types.js';
+import { viewShell, dataTable, badge, muted, plural, type Row } from './ui.js';
 
 const LABEL: Record<string, string> = { md5: 'MD5', sha1: 'SHA-1', sha256: 'SHA-256', sha384: 'SHA-384', sha512: 'SHA-512', crc32: 'CRC32' };
 
-export const renderHash: ViewRenderer = (host, raw, ctx) => {
+export const renderHash: ViewRenderer = (host, raw) => {
   const d = raw as HashData;
-  const body = h('tbody');
-  for (const r of d.rows) {
-    const name = (d.hmac && r.digest !== 'n/a' ? 'HMAC-' : '') + (LABEL[r.algorithm] ?? r.algorithm);
-    const copy = h('button.btn.small', { type: 'button', disabled: r.digest === 'n/a' }, 'Copy');
-    copy.addEventListener('click', () => ctx.copy(r.digest, name));
-    body.append(
-      h(
-        'tr',
-        { class: r.digest === 'n/a' ? 'is-na' : undefined },
-        h('td.hash-algo', {}, h('strong', {}, name), h('span.muted', {}, ` ${r.bits}-bit`)),
-        h('td.hash-digest', {}, r.digest === 'n/a' ? h('span.muted', {}, r.note ?? 'n/a') : h('code', {}, r.digest)),
-        h('td.hash-actions', {}, copy),
-      ),
-    );
-  }
-  host.append(
-    h('div.hash-meta', {}, h('span.badge.muted', {}, `${d.bytes} byte${d.bytes === 1 ? '' : 's'} hashed`), h('span.muted', {}, ` · ${d.encoding}${d.hmac ? ' · HMAC' : ''}`)),
-    h('div.table-wrap', {}, h('table.csv-table.hash-table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Algorithm'), h('th', {}, 'Digest'), h('th', {}, ''))), body)),
+  const rows: Row[] = d.rows.map((r) => {
+    const na = r.digest === 'n/a';
+    const name = (d.hmac && !na ? 'HMAC-' : '') + (LABEL[r.algorithm] ?? r.algorithm);
+    return {
+      algo: h('span', {}, h('strong', {}, name), muted(` ${r.bits}-bit`)),
+      digest: na ? h('span.v-muted', {}, r.note ?? 'not available') : r.digest,
+    };
+  });
+  // The pane head already states bytes and encoding; only flag HMAC here.
+  const { body } = viewShell(host, { status: d.hmac ? [badge('info', 'HMAC')] : undefined, flush: true });
+  body.append(
+    dataTable(
+      [
+        { key: 'algo', label: 'Algorithm' },
+        { key: 'digest', label: 'Digest', mono: true, wrap: true },
+      ],
+      rows,
+      { rowClass: (_r, i) => (d.rows[i]!.digest === 'n/a' ? 'is-na' : undefined) },
+    ),
   );
 };

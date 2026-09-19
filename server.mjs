@@ -40,6 +40,7 @@ const MIME = {
   '.ico': 'image/x-icon',
   '.webmanifest': 'application/manifest+json',
   '.txt': 'text/plain; charset=utf-8',
+  '.woff2': 'font/woff2',
 };
 const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.map', '.css', '.json', '.svg', '.webmanifest', '.txt']);
 /** Files that live in public/ but are addressed at the site root (PWA needs). */

@@ -1,12 +1,13 @@
 /**
  * Regex renderer: the input with every match wrapped in <mark class="rx-m">,
  * then a table of matches with index, full match and each capture group
- * (numbered and named) with copy buttons. Built from text nodes only.
+ * (numbered and named), every value copyable. Built from text nodes only.
  */
 
 import { h } from '../ui.js';
 import type { RegexData } from '../modes/regex.js';
 import type { ViewRenderer } from './types.js';
+import { viewShell, dataTable, emptyState, badge, plural, type Column, type Row } from './ui.js';
 
 export const renderRegex: ViewRenderer = (host, raw, ctx) => {
   const d = raw as RegexData;
@@ -22,31 +23,24 @@ export const renderRegex: ViewRenderer = (host, raw, ctx) => {
   });
   if (pos < d.input.length) pre.append(document.createTextNode(d.input.slice(pos)));
 
-  const copyBtn = (text: string, what: string) => {
-    const b = h('button.btn.small.rx-copy', { type: 'button', title: `Copy ${what}` }, 'Copy');
-    b.addEventListener('click', () => ctx.copy(text, what));
-    return b;
-  };
-  const cell = (text: string | undefined, what: string) =>
-    text === undefined ? h('td.missing.muted', {}, '—') : h('td', {}, h('code', {}, text === '' ? '(empty)' : text), copyBtn(text, what));
-
-  const table = h('table.csv-table.rx-table');
-  const head = h('tr', {}, h('th.rownum', {}, '#'), h('th', {}, 'Index'), h('th', {}, 'Match'));
-  for (let g = 1; g <= d.groupCount; g++) head.append(h('th', {}, `$${g}`));
-  for (const n of d.groupNames) head.append(h('th', {}, `<${n}>`));
-  table.append(h('thead', {}, head));
-  const body = h('tbody');
-  d.matches.forEach((m, i) => {
-    const tr = h('tr', {}, h('td.rownum', {}, String(i + 1)), h('td', {}, `${m.index}–${m.end}`), cell(m.match, `match ${i + 1}`));
-    for (let g = 0; g < d.groupCount; g++) tr.append(cell(m.groups[g], `group ${g + 1}`));
-    for (const n of d.groupNames) tr.append(cell(m.named[n], `group ${n}`));
-    body.append(tr);
+  const columns: Column[] = [
+    { key: 'index', label: 'Index', mono: true, numeric: true },
+    { key: 'match', label: 'Match', mono: true, wrap: true },
+  ];
+  for (let g = 1; g <= d.groupCount; g++) columns.push({ key: `g${g}`, label: `$${g}`, mono: true, wrap: true });
+  for (const n of d.groupNames) columns.push({ key: `n:${n}`, label: `<${n}>`, mono: true, wrap: true });
+  const cell = (text: string | undefined) => (text === undefined ? undefined : text === '' ? { text: h('span.v-muted', {}, 'empty'), copy: '' } : text);
+  const rows: Row[] = d.matches.map((m) => {
+    const row: Row = { index: { text: `${m.index}–${m.end}`, copy: false }, match: cell(m.match) };
+    for (let g = 0; g < d.groupCount; g++) row[`g${g + 1}`] = cell(m.groups[g]);
+    for (const n of d.groupNames) row[`n:${n}`] = cell(m.named[n]);
+    return row;
   });
-  table.append(body);
 
-  host.append(
-    h('div.rx-head', {}, h('code', {}, `/${d.pattern}/${d.flags}`), h('span.muted', {}, ` · ${d.matches.length} match${d.matches.length === 1 ? '' : 'es'}${d.capped ? ' (capped)' : ''}`)),
-    pre,
-    d.matches.length ? h('div.table-wrap', {}, table) : h('p.muted', {}, 'No matches.'),
-  );
+  const { body } = viewShell(host, {
+    status: [h('code', {}, `/${d.pattern}/${d.flags}`), badge(d.matches.length ? 'ok' : 'neutral', plural(d.matches.length, 'match', 'matches')), d.capped ? badge('warn', 'capped') : null],
+    flush: true,
+    column: true,
+  });
+  body.append(pre, d.matches.length ? dataTable(columns, rows, { rowNum: true }) : emptyState('No matches. Adjust the pattern or flags.'));
 };

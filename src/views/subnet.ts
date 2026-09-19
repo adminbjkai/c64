@@ -1,62 +1,60 @@
 /**
- * Subnet renderer: a card per parsed item with a label → value table and
- * copy buttons; IPv4 blocks get a "split into /N" select that re-runs the
- * mode with the `split` option, listing the sub-blocks.
+ * Subnet renderer: a card per parsed item with a label → value grid; IPv4
+ * blocks get a "Split into /N" select in the card actions that re-runs the
+ * mode with the `split` option and lists the sub-blocks.
  */
 
 import { h } from '../ui.js';
 import type { SubnetData, SubnetItem } from '../modes/ip-subnet.js';
 import type { ViewRenderer, ViewContext } from './types.js';
+import { viewShell, cardList, kvTable, dataTable, section, badge, muted, copyButton, type Card } from './ui.js';
 
 export const renderSubnet: ViewRenderer = (host, raw, ctx) => {
   const d = raw as SubnetData;
-  for (const it of d.items) host.append(renderItem(it, ctx));
+  const { body } = viewShell(host);
+  body.append(cardList(d.items.map((it) => card(it, ctx))));
 };
 
-function copyBtn(ctx: ViewContext, value: string, what: string): HTMLElement {
-  const b = h('button.btn.small', { type: 'button' }, 'Copy');
-  b.addEventListener('click', () => ctx.copy(value, what));
-  return b;
-}
-
-function renderItem(it: SubnetItem, ctx: ViewContext): HTMLElement {
+function card(it: SubnetItem, ctx: ViewContext): Card {
   if (it.kind === 'range') {
-    const body = h('tbody');
-    for (const c of it.cidrs) body.append(h('tr', {}, h('td.subnet-value', {}, h('code', {}, c)), h('td.subnet-actions', {}, copyBtn(ctx, c, c))));
-    return h(
-      'section.subnet-card',
-      {},
-      h('header.subnet-head', {}, h('code.subnet-input', {}, it.input), h('span.badge', {}, `IPv${it.version} range`), h('span.muted', {}, ` ${it.count} addresses · line ${it.line}`)),
-      h('div.table-wrap', {}, h('table.csv-table.subnet-table', {}, body)),
-      h('div.subnet-foot', {}, copyBtn(ctx, it.cidrs.join('\n'), 'CIDR list')),
-    );
+    return {
+      title: h('code', {}, it.input),
+      meta: [badge('neutral', `IPv${it.version} range`), muted(`${it.count} addresses, line ${it.line}`)],
+      actions: [copyButton('Copy list', () => it.cidrs.join('\n'))],
+      body: dataTable([{ key: 'cidr', label: 'CIDR', mono: true }], it.cidrs.map((c) => ({ cidr: c })), { rowNum: true }),
+    };
   }
-  const body = h('tbody');
-  for (const r of it.rows) {
-    body.append(h('tr', {}, h('td.subnet-label', {}, r.label), h('td.subnet-value', {}, h('code', {}, r.value)), h('td.subnet-actions', {}, copyBtn(ctx, r.value, r.label))));
-  }
-  const card = h(
-    'section.subnet-card',
-    {},
-    h('header.subnet-head', {}, h('code.subnet-input', {}, it.cidr), h('span.badge', {}, `IPv${it.version}`), h('span.badge.subnet-type', {}, it.type), h('span.muted', {}, ` line ${it.line}`)),
-    h('div.table-wrap', {}, h('table.csv-table.subnet-table', {}, body)),
-  );
+  const actions: Node[] = [];
+  const parts: (Node | null)[] = [kvTable(it.rows.map((r) => ({ label: r.label, value: r.value })))];
   if (it.splitChoices.length) {
     const sel = h<HTMLSelectElement>('select.subnet-split-select', { 'aria-label': 'Split into' });
     const base = Number(it.cidr.split('/')[1]);
-    sel.append(h('option', { value: 'none' }, 'no split'));
+    sel.append(h('option', { value: 'none' }, 'No split'));
     for (const n of it.splitChoices) sel.append(h('option', { value: `+${n}` }, `/${base + n} (${2 ** n} blocks)`));
     sel.value = it.splitPrefix === null ? 'none' : `+${it.splitPrefix - base}`;
     sel.addEventListener('change', () => ctx.setOption('split', sel.value));
-    const bar = h('div.subnet-split', {}, h('span.muted', {}, 'Split into '), sel);
-    card.append(bar);
+    actions.push(h('label.v-inline', {}, muted('Split into'), sel));
     if (it.splits.length) {
-      const sb = h('tbody');
-      for (const s of it.splits) {
-        sb.append(h('tr', {}, h('td.subnet-value', {}, h('code', {}, s.cidr)), h('td.subnet-value', {}, h('code', {}, `${s.first} – ${s.last}`)), h('td.subnet-actions', {}, copyBtn(ctx, s.cidr, s.cidr))));
-      }
-      card.append(h('div.table-wrap', {}, h('table.csv-table.subnet-table.subnet-splits', {}, h('thead', {}, h('tr', {}, h('th', {}, 'block'), h('th', {}, 'hosts'), h('th'))), sb)));
+      parts.push(
+        section(
+          'Blocks',
+          { meta: String(it.splits.length) },
+          dataTable(
+            [
+              { key: 'block', label: 'Block', mono: true },
+              { key: 'hosts', label: 'Hosts', mono: true },
+            ],
+            it.splits.map((s) => ({ block: s.cidr, hosts: `${s.first} to ${s.last}` })),
+            { rowNum: true },
+          ),
+        ),
+      );
     }
   }
-  return card;
+  return {
+    title: h('code', {}, it.cidr),
+    meta: [badge('neutral', `IPv${it.version}`), badge('neutral', it.type), muted(`line ${it.line}`)],
+    actions,
+    body: parts,
+  };
 }

@@ -363,7 +363,7 @@ boardBtn.addEventListener('click', () => {
 });
 
 const addPane = document.getElementById('add-pane')!;
-addPane.append(icon('plus', 14), h('span', {}, 'Pane'), icon('chevronDown', 12));
+addPane.append(icon('plus', 14), h('span', {}, 'Add pane'), icon('chevronDown', 12));
 addPane.addEventListener('click', () => {
   menu(addPane, [
     { icon: 'splitRight', label: 'Add right', keys: 'Alt+Shift+R', run: () => board.active && board.add(board.active.node.id, 'row') },
@@ -374,7 +374,7 @@ addPane.addEventListener('click', () => {
 const paletteBtn = document.getElementById('palette-toggle')!;
 paletteBtn.append(icon('command', 14), h('span', {}, 'Commands'), h('kbd', {}, navigator.platform.includes('Mac') ? '⌘K' : 'Ctrl K'));
 paletteBtn.addEventListener('click', () => palette.open());
-// Panes ask for the palette (start chips, "Detected … · change") via an event.
+// Panes ask for the palette (start chips, "Detected … — change") via an event.
 document.addEventListener('c64:palette', () => palette.open());
 
 const themeToggle = document.getElementById('theme-toggle')!;
@@ -477,7 +477,7 @@ const palette = new Palette((): Command[] => {
     { id: 'ws:font+', group: 'Workspace', label: 'Bigger content text', icon: 'arrowUp', run: () => setFontSize(prefs.fontSize + 1) },
     { id: 'ws:font-', group: 'Workspace', label: 'Smaller content text', icon: 'arrowDown', run: () => setFontSize(prefs.fontSize - 1) },
     { id: 'ws:sidebar', group: 'Workspace', label: document.body.classList.contains('sidebar-collapsed') ? 'Show sidebar' : 'Hide sidebar', icon: 'menu', run: () => setSidebar(document.body.classList.contains('sidebar-collapsed')) },
-    { id: 'ws:about', group: 'Workspace', label: `About c64 v${VERSION}`, icon: 'info', run: () => window.open('https://github.com/adminbjkai/c64', '_blank', 'noopener') },
+    { id: 'ws:about', group: 'Workspace', label: `About c64 v${VERSION}`, hint: 'Source on GitHub', icon: 'github', run: () => window.open('https://github.com/adminbjkai/c64', '_blank', 'noopener') },
   );
   return cmds;
 });
@@ -494,23 +494,22 @@ function setFontSize(px: number): void {
 const status = document.getElementById('statusbar')!;
 const statusPanes = h('span.status-item');
 const statusActive = h('span.status-item.status-active');
-const statusRight = h('span.status-item.muted', {}, `v${VERSION}`);
-const repoLink = h<HTMLAnchorElement>('a.status-item', { href: 'https://github.com/adminbjkai/c64', target: '_blank', rel: 'noopener', title: 'Source on GitHub' }, icon('github', 13), h('span', {}, 'GitHub'));
+const statusRight = h('span.status-item.muted', { title: 'c64 version. Source and licence: About c64 in the command palette' }, `v${VERSION}`);
 status.append(
-  h('span.status-item.local-badge', { title: 'All parsing and formatting happens in this tab. No request ever carries your content.' }, h('span.dot', { 'aria-hidden': 'true' }), 'Runs entirely in your browser'),
+  h('span.status-item.local-badge', { title: 'Nothing you paste leaves this tab.' }, h('span.dot', { 'aria-hidden': 'true' }), h('span', {}, 'Local')),
   statusPanes,
   statusActive,
   h('span.spacer'),
-  repoLink,
   statusRight,
 );
 function paintStatus(): void {
   const n = board.panes.length;
-  statusPanes.textContent = `${n} pane${n === 1 ? '' : 's'}${board.zoomed ? ' · maximised' : ''}`;
+  statusPanes.textContent = `${n} pane${n === 1 ? '' : 's'}${board.zoomed ? ', one maximised' : ''}`;
   const a = board.active;
   if (a) {
     const r = a.result;
-    statusActive.textContent = `${board.titleOf(a.node.id, true)}${r.status ? ' — ' + r.status : ''}`;
+    // Status grammar: "name — verdict, fact, fact" (modes still emit " · " chains).
+    statusActive.textContent = `${board.titleOf(a.node.id, true)}${r.status ? ' — ' + r.status.split(' · ').join(', ') : ''}`;
     statusActive.classList.toggle('is-error', !!r.error);
   }
 }

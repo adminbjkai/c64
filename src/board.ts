@@ -20,7 +20,9 @@ import {
   createPane,
   clonePane,
   swapPanes,
+  movePane,
   sanitize,
+  type Edge,
   type LayoutNode,
   type SplitNode,
   type PaneNode,
@@ -28,6 +30,7 @@ import {
 } from './layout.js';
 import { PaneView, type BoardActions } from './pane.js';
 import { h, toast } from './ui.js';
+import { installKeyboard } from './pane-interactions.js';
 
 /** Board widths from this up put input and output side by side by default. */
 const SIDE_MIN_WIDTH = 900;
@@ -77,6 +80,15 @@ export class Board {
     host.addEventListener('pointerdown', (e) => {
       const pane = (e.target as HTMLElement).closest<HTMLElement>('.pane');
       if (pane?.dataset['paneId']) this.setActive(pane.dataset['paneId']);
+    });
+    // Drag-to-reorder: a pane's grip asks for a move (see pane-interactions).
+    host.addEventListener('c64:move', (e) => {
+      const d = (e as CustomEvent<{ paneId: string; targetId: string; edge: Edge }>).detail;
+      if (d) this.move(d.paneId, d.targetId, d.edge);
+    });
+    installKeyboard(() => {
+      const v = this.active;
+      return v ? { escapeInPane: () => v.escapeInPane(), focusEditor: () => v.focus() } : null;
     });
     this.render();
     const first = allPanes(this.root)[0]!;
@@ -179,6 +191,17 @@ export class Board {
     swapPanes(this.root, id, other.id);
     this.render();
     this.persist();
+    this.views.get(id)?.focus();
+  }
+
+  /** Drop pane `id` on `edge` of pane `targetId` (drag-to-reorder). */
+  move(id: string, targetId: string, edge: Edge): void {
+    if (id === targetId || !findPane(this.root, id) || !findPane(this.root, targetId)) return;
+    this.root = movePane(this.root, id, targetId, edge);
+    this.zoomedId = null;
+    this.render();
+    this.persist();
+    this.setActive(id);
     this.views.get(id)?.focus();
   }
 

@@ -144,6 +144,10 @@ c64.bjk.ai are in [`deploy/`](deploy/).
   the Web Worker (used above 150 000 characters) and are unit-tested without
   a browser. Rich output is a serialisable view descriptor rendered by a
   separate module.
+* **One typeface, one accent.** Content is JetBrains Mono (self-hosted,
+  variable, latin subset, ~105 KB), chrome is the system sans. Neutral warm
+  greys with a single indigo accent spent only on the primary action, the
+  active pane and focus; green, amber and red are reserved for state.
 * **Shortcuts use `Alt+Shift+key`** because `Ctrl/Cmd+Shift` collides with text
   selection in the editor and with browser tab shortcuts.
 * More in [docs/architecture.md](docs/architecture.md).

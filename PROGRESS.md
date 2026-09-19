@@ -49,7 +49,18 @@
 | R3-4 | Release v1.2.0, deploy, verify | verifier PASS, CI, live | ✅ | verifier PASS-with-concerns; CI success; healthz 1.2.0 |
 | R3-5 | Patch v1.2.1: option leak, re-detect while typing, Pretty/Raw in Auto, chip count | repro passes | ✅ | repro script: manual Base64 → "Decode / Encode", direction auto, 0 errors |
 
+## Round 4 (2026-09-19) — v1.3: design system
+
+| # | Stage | Acceptance | Status | Evidence |
+|---|---|---|---|---|
+| R4-1 | Design lead spec: identity, tokens, layout anatomy, view primitives, interactivity, copy rules, 3 lanes | decided spec | ✅ | /tmp/spec/design-spec.md (72 lines) |
+| R4-2 | Lane A tokens/type (JetBrains Mono self-hosted)/frame/pane chrome | tests, smoke, screenshots | 🔶 | running |
+| R4-3 | Lane B view primitives (src/views/ui.ts) + all 26 views migrated | tests, screenshots | 🔶 | running |
+| R4-4 | Lane C drag-reorder, view-as, inline copy, keyboard, palette groups | tests, browser | 🔶 | running |
+| R4-5 | Merge, verify, docs, release v1.3.0, deploy | verifier PASS, CI, live | ⬜ | |
+
 ## Decisions log
+- Accent moves from green to indigo (#4a5bd8 / #8b97ff) so green means "valid"; JetBrains Mono self-hosted is the one bold typographic choice. (2026-09-19)
 - Keep zero runtime deps and no bundler (auditability is the product's point). Hash mode uses WebCrypto (async) → `run` may return a Promise. (2026-09-18)
 - Lanes must not edit shared registries (modes/index.ts, views/index.ts, icons.ts, types.ts); orchestrator wires them. (2026-09-18)
 

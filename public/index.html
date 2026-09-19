@@ -5,13 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
   <meta name="description" content="c64 — a local-first workspace for decoding, formatting, converting and inspecting structured text. JSON, XML, YAML, CSV, Base64, JWT, hashes, diffs, regex and more, in tileable panes. Nothing leaves your browser." />
-  <meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)" />
-  <meta name="theme-color" content="#f3f4f6" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#131519" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#ececea" media="(prefers-color-scheme: light)" />
   <!-- Local-only guarantee, enforced by the browser: the page may only load
        its own files and can never make a request carrying user content. -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'" />
   <title>c64 — local encode / decode / format workspace</title>
+  <link rel="preload" href="/public/fonts/JetBrainsMono[wght]-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/public/styles.css" />
+  <link rel="stylesheet" href="/public/interactions.css" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/icon-192.png" />
   <link rel="manifest" href="/manifest.webmanifest" />
@@ -22,10 +24,7 @@
     <aside class="sidebar" id="sidebar" aria-label="Tools">
       <div class="sidebar-brand">
         <span class="logo" aria-hidden="true"></span>
-        <div>
-          <strong>c64</strong>
-          <span class="tagline">encode · decode · format</span>
-        </div>
+        <strong>c64</strong>
       </div>
       <label class="search">
         <span class="search-icon" id="search-icon" aria-hidden="true"></span>
@@ -39,7 +38,7 @@
     <div class="main">
       <header class="topbar">
         <button id="sidebar-toggle" class="btn icon" type="button" title="Show / hide the tool list" aria-label="Toggle sidebar" aria-expanded="true"></button>
-        <button id="board-menu" class="btn tb board-btn" type="button" title="Boards: switch, create, export, import, share" aria-haspopup="menu"></button>
+        <button id="board-menu" class="btn tb board-btn" type="button" title="Boards: switch, create, export, import or share" aria-haspopup="menu"></button>
         <span class="spacer"></span>
         <button id="add-pane" class="btn tb" type="button" title="Add a pane next to the active one (Alt+Shift+R / B)" aria-haspopup="menu"></button>
         <button id="palette-toggle" class="btn tb" type="button" title="Command palette (⌘/Ctrl+K)"></button>

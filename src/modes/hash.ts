@@ -82,7 +82,7 @@ export async function runHash(input: string, ctx: RunContext): Promise<ModeResul
     output,
     view: { kind: 'hash', data: { rows, bytes: data.length, encoding, hmac } satisfies HashData },
     notes: notes.length ? notes : undefined,
-    status: `${label} · ${data.length} byte${data.length === 1 ? '' : 's'} (${formatBytes(data.length)}) · ${encoding}${trim ? ' · trimmed' : ''}`,
+    status: `${label} · ${formatBytes(data.length)} · ${encoding}${trim ? ' · trimmed' : ''}`,
   };
 }
 

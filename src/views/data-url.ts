@@ -2,58 +2,58 @@
  * Data URL renderer: a card with MIME, size, detected type, image
  * dimensions (read from an <img> built from the data URL — same-document
  * data, allowed by the img-src CSP), an image preview, and Download /
- * Copy data URL buttons.
+ * Copy data URL actions.
  */
 
 import { h } from '../ui.js';
 import type { DataUrlData } from '../modes/data-url.js';
 import type { ViewRenderer } from './types.js';
 import { formatBytes } from '../modes/types.js';
+import { viewShell, cardList, kvTable, badge, muted, copyButton, type KvRow } from './ui.js';
 
-export const renderDataUrl: ViewRenderer = (host, raw, ctx) => {
+export const renderDataUrl: ViewRenderer = (host, raw) => {
   const d = raw as DataUrlData;
-  const body = h('tbody');
-  const row = (label: string, value: string | Node, copyValue?: string): void => {
-    const actions = h('td.du-actions');
-    if (copyValue !== undefined) {
-      const b = h('button.btn.small', { type: 'button' }, 'Copy');
-      b.addEventListener('click', () => ctx.copy(copyValue, label));
-      actions.append(b);
-    }
-    body.append(h('tr', {}, h('td.du-label', {}, label), h('td.du-value', {}, typeof value === 'string' ? h('code', {}, value) : value), actions));
-  };
-  row('MIME', d.mediaType, d.mediaType);
-  row('size', `${formatBytes(d.size)} (${d.size.toLocaleString('en-US')} bytes)`);
-  row('encoding', d.base64 ? 'base64' : 'percent-encoded');
+  const rows: KvRow[] = [
+    { label: 'MIME', value: d.mediaType },
+    { label: 'Size', value: `${formatBytes(d.size)} (${d.size.toLocaleString('en-US')} bytes)`, copy: String(d.size) },
+    { label: 'Encoding', value: d.base64 ? 'base64' : 'percent-encoded', copy: false },
+  ];
   if (d.detected) {
-    row('detected', h('span', {}, h('code', {}, `${d.detected.label} (${d.detected.mime})`), ' ', h(`span.badge.${d.mismatch ? 'warn' : 'ok'}`, {}, d.mismatch ? 'mismatch' : 'matches')));
+    rows.push({
+      label: 'Detected',
+      value: `${d.detected.label} (${d.detected.mime})`,
+      copy: d.detected.mime,
+      note: badge(d.mismatch ? 'warn' : 'ok', d.mismatch ? 'mismatch' : 'matches'),
+      tone: d.mismatch ? 'warn' : undefined,
+    });
   }
-  const dimsCell = h('code', {}, '…');
-  if (d.isImage) row('dimensions', dimsCell);
+  const dims = h('span', {}, '…');
+  if (d.isImage) rows.push({ label: 'Dimensions', value: dims, copy: false });
 
-  const copyUrl = h('button.btn.small', { type: 'button' }, 'Copy data URL');
-  copyUrl.addEventListener('click', () => ctx.copy(d.dataUrl, 'data URL'));
-  const download = h<HTMLAnchorElement>('a.btn.small.du-download', { href: d.dataUrl, download: d.filename }, 'Download');
-
-  const card = h(
-    'section.du-card',
-    {},
-    h('header.du-head', {}, h('span.badge', {}, d.direction === 'decode' ? 'decoded' : 'encoded'), h('code.du-mime', {}, d.mime), h('span.muted', {}, ` · ${formatBytes(d.size)}`)),
-    h('div.table-wrap', {}, h('table.csv-table.du-table', {}, body)),
-    h('div.du-actions-bar', {}, download, copyUrl),
-  );
-
+  const download = h<HTMLAnchorElement>('a.btn.small', { href: d.dataUrl, download: d.filename }, 'Download');
+  const parts: (Node | null)[] = [kvTable(rows)];
   if (d.isImage) {
-    const img = h<HTMLImageElement>('img.du-preview', { src: d.dataUrl, alt: d.filename, style: 'max-width:320px;max-height:320px' });
+    const img = h<HTMLImageElement>('img.du-preview', { src: d.dataUrl, alt: d.filename });
     img.addEventListener('load', () => {
-      dimsCell.textContent = `${img.naturalWidth} × ${img.naturalHeight} px`;
+      dims.textContent = `${img.naturalWidth} × ${img.naturalHeight} px`;
     });
     img.addEventListener('error', () => {
-      dimsCell.textContent = 'not decodable as an image';
+      dims.textContent = 'not decodable as an image';
     });
-    card.append(h('div.du-preview-wrap', {}, img));
+    parts.push(h('div.du-preview-wrap', {}, img));
   } else if (d.text !== null) {
-    card.append(h('pre.du-text', {}, d.text));
+    parts.push(h('pre.du-text', {}, d.text));
   }
-  host.append(card);
+
+  const { body } = viewShell(host);
+  body.append(
+    cardList([
+      {
+        title: h('code', {}, d.mime),
+        meta: [badge('neutral', d.direction === 'decode' ? 'decoded' : 'encoded'), muted(formatBytes(d.size))],
+        actions: [download, copyButton('Copy data URL', () => d.dataUrl)],
+        body: parts,
+      },
+    ]),
+  );
 };

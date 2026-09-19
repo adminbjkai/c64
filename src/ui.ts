@@ -74,6 +74,51 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
+/* ---------------------------------------------------------- inline copy */
+
+let liveEl: HTMLElement | null = null;
+const inlineTimers = new WeakMap<HTMLElement, number>();
+
+/** Announce to screen readers without showing anything (one shared region). */
+export function announce(message: string): void {
+  if (!liveEl) {
+    liveEl = h('div.sr-live', { role: 'status', 'aria-live': 'polite' });
+    document.body.append(liveEl);
+  }
+  liveEl.textContent = '';
+  liveEl.textContent = message;
+}
+
+/**
+ * Copy `text` and confirm on the control itself: its label swaps to "Copied"
+ * (ok colour, `.is-done`) for 1200 ms, then restores. No toast — the
+ * confirmation sits where the eye already is. Returns whether the copy worked.
+ */
+export async function copyInline(button: HTMLElement, text: string, label = 'Copied'): Promise<boolean> {
+  const ok = await copyText(text);
+  if (!ok) {
+    toast("Couldn't copy. Select the result and press Ctrl+C.");
+    return false;
+  }
+  const target = button.querySelector<HTMLElement>('span') ?? button;
+  const pending = inlineTimers.get(button);
+  if (pending !== undefined) clearTimeout(pending);
+  else button.dataset['label'] = target.textContent ?? '';
+  target.textContent = label;
+  button.classList.add('is-done');
+  announce(label);
+  inlineTimers.set(
+    button,
+    window.setTimeout(() => {
+      target.textContent = button.dataset['label'] ?? '';
+      delete button.dataset['label'];
+      button.classList.remove('is-done');
+      inlineTimers.delete(button);
+    }, 1200),
+  );
+  return true;
+}
+
 /* ------------------------------------------------------------------ theme */
 
 export function currentTheme(): Theme {
@@ -113,6 +158,10 @@ let openMenu: HTMLElement | null = null;
 export function closeMenu(): void {
   openMenu?.remove();
   openMenu = null;
+}
+
+export function isMenuOpen(): boolean {
+  return openMenu !== null;
 }
 
 /**

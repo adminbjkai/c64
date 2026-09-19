@@ -43,7 +43,12 @@ export interface PaneState {
    * choice clears it; Clear returns the pane to `auto`.
    */
   detected?: boolean;
+  /** How a JSON-valued result is shown: as text, a collapsible tree or a table. */
+  viewAs?: 'text' | 'tree' | 'table';
 }
+
+/** Side of a target pane a dragged pane is dropped on. */
+export type Edge = 'left' | 'right' | 'top' | 'bottom';
 
 export interface PaneNode {
   type: 'pane';
@@ -129,6 +134,11 @@ export function addSibling(
   dir: Direction,
   fresh: PaneNode = createPane(),
 ): LayoutNode {
+  return insertBeside(root, targetId, dir, fresh, false);
+}
+
+/** Shared by addSibling and movePane: put `fresh` before or after `targetId` along `dir`. */
+function insertBeside(root: LayoutNode, targetId: string, dir: Direction, fresh: LayoutNode, before: boolean): LayoutNode {
   const parent = findParent(root, targetId);
   const target = parent ? parent.children.find((c) => c.id === targetId) : root;
   if (!target) return root;
@@ -137,7 +147,7 @@ export function addSibling(
     // Same axis: become one more sibling, splitting the target's share.
     const i = parent.children.indexOf(target);
     const share = parent.sizes[i] ?? 0;
-    parent.children.splice(i + 1, 0, fresh);
+    parent.children.splice(before ? i : i + 1, 0, fresh);
     parent.sizes.splice(i, 1, share / 2, share / 2);
     return root;
   }
@@ -147,12 +157,29 @@ export function addSibling(
     type: 'split',
     id: newId('s'),
     dir,
-    children: [target, fresh],
+    children: before ? [fresh, target] : [target, fresh],
     sizes: [0.5, 0.5],
   };
   if (!parent) return wrapper;
   parent.children[parent.children.indexOf(target)] = wrapper;
   return root;
+}
+
+/**
+ * Move pane `paneId` so it sits on `edge` of pane `targetId` (drag-to-reorder).
+ * The pane is detached first (its space goes to its old neighbour, lone
+ * splits collapse), then inserted beside the target: right/bottom = after
+ * along the row/column, left/top = before. It takes half the target's share.
+ * Returns root unchanged when either pane is missing or they are the same.
+ */
+export function movePane(root: LayoutNode, paneId: string, targetId: string, edge: Edge): LayoutNode {
+  if (paneId === targetId) return root;
+  const node = findPane(root, paneId);
+  if (!node || !findPane(root, targetId)) return root;
+  if (!findParent(root, paneId)) return root; // lone root pane: nowhere to go
+  root = removePane(root, paneId);
+  const dir: Direction = edge === 'left' || edge === 'right' ? 'row' : 'col';
+  return insertBeside(root, targetId, dir, node, edge === 'left' || edge === 'top');
 }
 
 /**
@@ -254,6 +281,7 @@ export function sanitize(node: unknown): LayoutNode | null {
         ...(typeof s.sourceId === 'string' ? { sourceId: s.sourceId } : {}),
         ...(s.wrap === true ? { wrap: true } : {}),
         ...(s.detected === true ? { detected: true } : {}),
+        ...(s.viewAs === 'tree' || s.viewAs === 'table' ? { viewAs: s.viewAs } : {}),
       }),
     };
   }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   addSibling,
   removePane,
+  movePane,
   resizeSeam,
   sanitize,
   createPane,
@@ -181,4 +182,120 @@ test('findParent locates the immediate split', () => {
   const root = addSibling(a, a.id, 'col');
   assert.equal(findParent(root, a.id), root);
   assert.equal(findParent(a, a.id), null);
+});
+
+/* ------------------------------------------------------------- movePane */
+
+/** row[a, b, c] with equal thirds. */
+function threeInARow() {
+  const a = createPane();
+  let root = addSibling(a, a.id, 'row');
+  const b = allPanes(root)[1]!;
+  root = addSibling(root, b.id, 'row');
+  const c = allPanes(root)[2]!;
+  (root as SplitNode).sizes = [1 / 3, 1 / 3, 1 / 3];
+  return { root, a, b, c };
+}
+
+test('movePane: onto its own neighbour along the same axis reorders siblings', () => {
+  const { root: r0, a, b, c } = threeInARow();
+  // c onto a's left edge → row[c, a, b]
+  const root = movePane(r0, c.id, a.id, 'left');
+  assert.deepEqual(allPanes(root).map((p) => p.id), [c.id, a.id, b.id]);
+  const row = root as SplitNode;
+  // c gave its third to b, then took half of a's third
+  assert.deepEqual(row.sizes.map((x) => +x.toFixed(6)), [+(1 / 6).toFixed(6), +(1 / 6).toFixed(6), +(2 / 3).toFixed(6)]);
+  assertInvariants(root);
+});
+
+test('movePane: right edge inserts after the target', () => {
+  const { root: r0, a, b, c } = threeInARow();
+  const root = movePane(r0, a.id, c.id, 'right');
+  assert.deepEqual(allPanes(root).map((p) => p.id), [b.id, c.id, a.id]);
+  assertInvariants(root);
+});
+
+test('movePane: onto a cross-axis edge wraps the target in a new split', () => {
+  const { root: r0, a, b, c } = threeInARow();
+  // c below a → row[col[a, c], b]
+  const root = movePane(r0, c.id, a.id, 'bottom') as SplitNode;
+  assert.equal(root.dir, 'row');
+  assert.equal(root.children.length, 2);
+  const wrap = root.children[0] as SplitNode;
+  assert.equal(wrap.type, 'split');
+  assert.equal(wrap.dir, 'col');
+  assert.deepEqual(wrap.children.map((n) => n.id), [a.id, c.id]);
+  assert.deepEqual(wrap.sizes, [0.5, 0.5]);
+  assert.equal(root.children[1], b);
+  assertInvariants(root);
+  // top puts it before
+  const root2 = movePane(root, c.id, a.id, 'top') as SplitNode;
+  assert.deepEqual((root2.children[0] as SplitNode).children.map((n) => n.id), [c.id, a.id]);
+  assertInvariants(root2);
+});
+
+test('movePane: into a different subtree collapses the emptied split', () => {
+  // row[a, col[b, c]] → move a to the right of c → col[b, row[c, a]]
+  const a = createPane();
+  let root = addSibling(a, a.id, 'row');
+  const b = allPanes(root)[1]!;
+  root = addSibling(root, b.id, 'col');
+  const c = allPanes(root)[2]!;
+  root = movePane(root, a.id, c.id, 'right');
+  const col = root as SplitNode;
+  assert.equal(col.type, 'split');
+  assert.equal(col.dir, 'col');
+  assert.equal(col.children[0], b);
+  const row = col.children[1] as SplitNode;
+  assert.equal(row.dir, 'row');
+  assert.deepEqual(row.children.map((n) => n.id), [c.id, a.id]);
+  assert.equal(paneCount(root), 3);
+  assertInvariants(root);
+});
+
+test('movePane: onto the root-level target of a two-pane board flips the axis', () => {
+  const a = createPane();
+  const r0 = addSibling(a, a.id, 'row');
+  const b = allPanes(r0)[1]!;
+  const root = movePane(r0, b.id, a.id, 'top') as SplitNode;
+  assert.equal(root.dir, 'col');
+  assert.deepEqual(root.children.map((n) => n.id), [b.id, a.id]);
+  assert.deepEqual(root.sizes, [0.5, 0.5]);
+  assertInvariants(root);
+});
+
+test('movePane: no-ops for self, unknown ids and a lone root pane', () => {
+  const lone = createPane();
+  const other = createPane();
+  assert.equal(movePane(lone, lone.id, other.id, 'left'), lone);
+  const { root, a, b } = threeInARow();
+  assert.equal(movePane(root, a.id, a.id, 'left'), root);
+  assert.equal(movePane(root, 'nope', a.id, 'left'), root);
+  assert.equal(movePane(root, a.id, 'nope', 'left'), root);
+  assert.deepEqual(allPanes(root).map((p) => p.id).slice(0, 2), [a.id, b.id]);
+  assertInvariants(root);
+});
+
+test('movePane: invariants hold across a random walk of moves', () => {
+  let root: LayoutNode = createPane();
+  for (let i = 0; i < 5; i++) root = addSibling(root, allPanes(root)[i % allPanes(root).length]!.id, i % 2 ? 'col' : 'row');
+  const edges = ['left', 'right', 'top', 'bottom'] as const;
+  let seed = 7;
+  const rnd = (n: number) => (seed = (seed * 48271) % 2147483647) % n;
+  for (let i = 0; i < 200; i++) {
+    const panes = allPanes(root);
+    const from = panes[rnd(panes.length)]!;
+    const to = panes[rnd(panes.length)]!;
+    root = movePane(root, from.id, to.id, edges[rnd(4)]!);
+    assert.equal(paneCount(root), 6);
+    assertInvariants(root);
+  }
+});
+
+test('sanitize keeps a valid viewAs and drops junk', () => {
+  const p = (state: Record<string, unknown>) => (sanitize({ type: 'pane', id: 'p', state }) as { state: { viewAs?: string } }).state;
+  assert.equal(p({ viewAs: 'tree' }).viewAs, 'tree');
+  assert.equal(p({ viewAs: 'table' }).viewAs, 'table');
+  assert.equal(p({ viewAs: 'text' }).viewAs, undefined);
+  assert.equal(p({ viewAs: 'x' }).viewAs, undefined);
 });

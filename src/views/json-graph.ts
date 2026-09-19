@@ -16,6 +16,7 @@ import { formatPath } from '../lib/jsonpath.js';
 import type { GraphData } from '../modes/json-graph.js';
 import type { Graph, GraphNode } from '../lib/graph-layout.js';
 import type { ViewRenderer } from './types.js';
+import { viewShell, copyInline } from './ui.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const ROW_H = 18;
@@ -87,14 +88,14 @@ export function ancestorsOf(graph: Graph, id: number): number[] {
   return out;
 }
 
-/** Human summary for the drawer: "object · 3 keys", "array · 12 items", "string". */
+/** Human summary for the drawer: "object, 3 keys", "array, 12 items", "string". */
 export function describeNode(n: GraphNode): string {
   if (n.kind === 'primitive') {
     const cls = n.rows[0]?.cls ?? 'null';
     return cls === 'str' ? 'string' : cls === 'num' ? 'number' : cls === 'bool' ? 'boolean' : 'null';
   }
   const size = /[[{](\d+)[\]}]\s*$/.exec(n.title)?.[1] ?? '?';
-  return n.kind === 'array' ? `array · ${size} item${size === '1' ? '' : 's'}` : `object · ${size} key${size === '1' ? '' : 's'}`;
+  return n.kind === 'array' ? `array, ${size} item${size === '1' ? '' : 's'}` : `object, ${size} key${size === '1' ? '' : 's'}`;
 }
 
 /** Pretty-print a raw JSON slice if it parses; otherwise return it as-is. */
@@ -391,8 +392,8 @@ export const renderJsonGraph: ViewRenderer = (host, raw, ctx) => {
     selectedId = null;
   };
   drawerClose.addEventListener('click', closeDrawer);
-  copyValue.addEventListener('click', () => ctx.copy(rawValue, 'value'));
-  copyPath.addEventListener('click', () => ctx.copy(drawerPath.textContent ?? '', 'path'));
+  copyValue.addEventListener('click', () => copyInline(copyValue, rawValue));
+  copyPath.addEventListener('click', () => copyInline(copyPath, drawerPath.textContent ?? ''));
   selectBtn.addEventListener('click', () => {
     if (selectedId === null) return;
     const span = spanOf(nodes[selectedId]!);
@@ -518,10 +519,12 @@ export const renderJsonGraph: ViewRenderer = (host, raw, ctx) => {
   wrap.append(root, pill, drawer);
   if (nodes.length > COLLAPSE_ABOVE) {
     for (const id of collapseFromDepth(graph, 2)) collapsed.add(id);
-    wrap.append(h('div.jg-notice', {}, `Large graph (${nodes.length} cards): branches below depth 2 start collapsed. Use ⊞ on a card or Expand all.`));
+    wrap.append(h('div.jg-notice', {}, `Large graph (${nodes.length.toLocaleString('en-US')} cards). Branches below depth 2 start collapsed; use ⊞ on a card or Expand all.`));
   }
   updateVisibility();
-  host.append(wrap);
+  const { body } = viewShell(host, { flush: true, column: true });
+  body.classList.add('is-clip');
+  body.append(wrap);
   // Fit once the SVG has a size (after layout).
   requestAnimationFrame(fit);
   const ro = new ResizeObserver(() => {

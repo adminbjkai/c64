@@ -40,7 +40,7 @@ test('all algorithms produce one labelled line each and a view', async () => {
   assert.match(lines[0]!, /^md5 {5}900150983cd24fb0d6963f7d28e17f72$/);
   assert.match(lines[2]!, /^sha256  ba7816bf/);
   assert.equal(r.view?.kind, 'hash');
-  assert.match(r.status!, /3 bytes/);
+  assert.match(r.status!, /3 B/);
 });
 
 test('HMAC-SHA256 known vector; md5/crc32 show n/a under HMAC', async () => {
@@ -66,7 +66,7 @@ test('encoding, uppercase and trim controls', async () => {
 test('non-ASCII is UTF-8 encoded before hashing', async () => {
   const r = await runHash('日本語', ctx({ algorithm: 'sha256' }));
   assert.equal(r.output, '77710aedc74ecfa33685e33a6c7df5cc83fd4e3ec1ef4a34ad1ce1d5c6e7b8e2'.length === 64 ? r.output : '');
-  assert.match(r.status!, /9 bytes/);
+  assert.match(r.status!, /9 B/);
   assert.equal(toHex(md5(enc('日本語'))), 'ff09bb7c9c8eaa1ada7a5f7d7e9d2b95'.length === 32 ? toHex(md5(enc('日本語'))) : '');
 });
 

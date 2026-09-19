@@ -3,10 +3,10 @@
  *
  *   ┌ title bar   : pane name, tool dropdown, description, Explain, ⋯ menu
  *   │               (+ maximise / split / close icons on multi-pane boards)
- *   ├ options bar : Pretty | Raw, up to three options (rest behind "Options ▾"), primary action
- *   ├ INPUT panel : label, link / detect chips, counters, Paste · Upload · Clear, gutter + editor
+ *   ├ options bar : Pretty | Raw, up to two options (rest in the "Options ▾" popover), primary action
+ *   ├ Input panel : label, link / detect chips, counters, Paste, Upload, Clear, gutter + editor
  *   ├ seam        : draggable (horizontal when stacked, vertical when side-by-side)
- *   └ OUTPUT panel: label, status, Copy · Send on · ⋯ (Find, Download), the result (text or rich view)
+ *   └ Result panel: label, status, Copy, Send on, ⋯ (Find, Download), the result (text or rich view)
  *
  * New panes start in the Auto detect pseudo-tool: the editor fills the pane
  * with a row of start chips under it, and the first recognisable paste
@@ -23,7 +23,8 @@ import { ExplainPanel } from './explain-ui.js';
 import { explain, detectMode, detectedName } from './explain.js';
 import { icon } from './icons.js';
 import { highlightInto } from './highlight.js';
-import { h, toast, copyText, menu, type MenuItem } from './ui.js';
+import { h, toast, copyText, copyInline, menu, type MenuItem } from './ui.js';
+import { bindDragReorder, buildViewAs, paintViewAs, parseJsonOutput, tableFromJson, interceptCopy, type ViewAs } from './pane-interactions.js';
 
 /** What a pane needs from the board. Kept minimal so pane.ts stays decoupled. */
 export interface BoardActions {
@@ -99,7 +100,7 @@ export function primaryLabel(mode: ToolMode, options: Record<string, unknown>): 
     case 'json-tree': case 'json-path': return 'Show tree';
     case 'json-graph': return 'Draw graph';
     case 'json-table': case 'csv': return 'Show table';
-    case 'auto': return 'Detect & run';
+    case 'auto': return 'Detect';
     default: return 'Run';
   }
 }
@@ -134,6 +135,8 @@ export class PaneView {
   private readonly viewHost: HTMLElement;
   private readonly errorBox: HTMLElement;
   private readonly statusEl: HTMLElement;
+  private readonly errorText: HTMLElement;
+  private readonly errorJump: HTMLElement;
   private readonly notesEl: HTMLElement;
   private readonly picker: HTMLElement;
   private readonly fileInput: HTMLInputElement;
@@ -146,6 +149,7 @@ export class PaneView {
   private readonly optionsMore: HTMLButtonElement;
   private optionsOpen = false;
   private readonly runBtn: HTMLButtonElement;
+  private readonly runSlot: HTMLElement;
   private readonly optionsBar: HTMLElement;
   private readonly prettySeg: HTMLElement;
   private readonly zoomBtn: HTMLButtonElement;
@@ -195,6 +199,8 @@ export class PaneView {
     // board sets data-panes="many" and CSS shows them as icons too (.multi).
     this.zoomBtn = ibtn('maximize', 'Maximise this pane (Alt+Shift+Enter)', () => board.zoom(node.id), 'zoom-btn.multi');
     const explainBtn = tbtn('bulb', 'Explain', 'What is this input? Local analysis, no server (Alt+Shift+E)', () => this.toggleExplain());
+    // Grab handle for drag-reorder (bound by the board); CSS shows it only on multi-pane boards.
+    const grip = h('span.pane-grip.multi', { 'aria-hidden': 'true', title: 'Drag to move this pane' });
     const moreBtn = ibtn('settings', 'Pane menu: layout, maximise, split, close…', (e) => this.openMenu(e.currentTarget as HTMLElement), 'more-btn');
     const addRightBtn = ibtn('splitRight', 'Add pane to the right (Alt+Shift+R)', () => board.addRight(node.id), 'multi');
     const addBelowBtn = ibtn('splitDown', 'Add pane below (Alt+Shift+B)', () => board.addBelow(node.id), 'multi');
@@ -203,6 +209,7 @@ export class PaneView {
     const title = h(
       'header.pane-title',
       {},
+      grip,
       this.titleEl,
       h('label.mode-picker', {}, this.modeIcon, this.modeSelect, icon('chevronDown', 12)),
       this.descEl,
@@ -230,11 +237,21 @@ export class PaneView {
     }
     this.controlsEl = h('div.mode-controls');
     this.controlsExtra = h('div.mode-controls.mode-controls-extra', { hidden: true });
-    this.optionsMore = h<HTMLButtonElement>('button.btn.small.options-more', { type: 'button', 'aria-expanded': 'false', title: 'More options for this tool' }, h('span', {}, 'Options'), icon('chevronDown', 12));
+    this.optionsMore = h<HTMLButtonElement>('button.btn.small.options-more', { type: 'button', 'aria-expanded': 'false', 'aria-haspopup': 'true', title: 'More options for this tool' }, h('span', {}, 'Options'), icon('chevronDown', 12));
     this.optionsMore.addEventListener('click', () => this.toggleOptions());
-    this.runBtn = h<HTMLButtonElement>('button.btn.primary.run-btn', { type: 'button', title: 'Run now (⌘/Ctrl+Enter) · Shift+click runs and copies the output' });
+    this.runBtn = h<HTMLButtonElement>('button.btn.primary.run-btn', { type: 'button', title: 'Run now (⌘/Ctrl+Enter). Shift+click runs and copies the result' });
     this.runBtn.addEventListener('click', (e) => this.runPrimary(e.shiftKey));
     this.optionsBar = h('div.pane-options', {}, h('div.options-row', {}, this.prettySeg, this.controlsEl, this.optionsMore, h('span.spacer'), this.runBtn), this.controlsExtra);
+    // The extra options live in a popover: close it on Escape or a click elsewhere.
+    this.optionsBar.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.optionsOpen) {
+        this.toggleOptions(false);
+        this.optionsMore.focus();
+      }
+    });
+    document.addEventListener('pointerdown', (e) => {
+      if (this.optionsOpen && !this.controlsExtra.contains(e.target as Node) && !this.optionsMore.contains(e.target as Node)) this.toggleOptions(false);
+    });
 
     // ---- input panel --------------------------------------------------------
     const makeEditor = (which: 'a' | 'b'): [HTMLTextAreaElement, HTMLElement] => {
@@ -265,7 +282,6 @@ export class PaneView {
     [this.textarea, this.gutter] = makeEditor('a');
     [this.textareaB, this.gutterB] = makeEditor('b');
     this.swapBtn = tbtn('swapAb', 'Swap', 'Swap the two inputs', () => this.swapInputs());
-    this.swapBtn.hidden = true;
     this.labelA = h('span.editor-label', {}, 'A');
     this.labelB = h('span.editor-label', {}, 'B');
 
@@ -281,6 +297,8 @@ export class PaneView {
     this.linkChip.addEventListener('click', () => board.link(node.id, null));
     this.detectChip = h<HTMLButtonElement>('button.chip.detect-chip', { type: 'button', hidden: true, title: 'Auto detect chose this tool — click to pick another' });
     this.detectChip.addEventListener('click', () => document.dispatchEvent(new CustomEvent('c64:palette')));
+    // Tools with no options put the action button here instead of an empty options row.
+    this.runSlot = h('span.run-slot', { hidden: true });
     const inputHead = h(
       'div.panel-head',
       {},
@@ -289,17 +307,17 @@ export class PaneView {
       this.detectChip,
       this.inputMeta,
       h('span.spacer'),
-      this.swapBtn,
       tbtn('paste', 'Paste', 'Paste from clipboard', () => void this.pasteFromClipboard()),
-      tbtn('upload', 'Upload', 'Open a local file — it never leaves your browser', () => fileInput.click()),
-      tbtn('clear', 'Clear', 'Clear the input and return to Auto detect', () => this.clearInput()),
+      tbtn('upload', 'Upload', 'Open a local file. It never leaves your browser', () => fileInput.click()),
+      tbtn('clear', 'Clear', 'Clear the input and go back to Auto detect', () => this.clearInput()),
       fileInput,
+      this.runSlot,
     );
     this.editorsEl = h(
       'div.editors',
       {},
-      h('div.editor-wrap', {}, this.labelA, this.gutter, this.textarea),
-      h('div.editor-wrap.editor-b', {}, this.labelB, this.gutterB, this.textareaB),
+      h('div.editor-wrap', {}, h('div.editor-head', {}, this.labelA, h('span.spacer'), this.swapBtn), h('div.editor-body', {}, this.gutter, this.textarea)),
+      h('div.editor-wrap.editor-b', {}, h('div.editor-head', {}, this.labelB), h('div.editor-body', {}, this.gutterB, this.textareaB)),
     );
     this.inputWrap = h('div.panel.pane-input', {}, inputHead, this.editorsEl);
 
@@ -308,19 +326,22 @@ export class PaneView {
       role: 'separator',
       'aria-label': 'Resize input and output',
       tabindex: '0',
-      title: 'Drag to resize · arrow keys nudge · double-click to reset',
+      title: 'Drag to resize. Arrow keys nudge, double-click resets',
     });
     this.bindInnerSeam(this.seam);
 
     // ---- output panel --------------------------------------------------------
-    this.output = h<HTMLPreElement>('pre.output', { tabindex: '0', 'aria-label': 'Output' });
+    this.output = h<HTMLPreElement>('pre.output', { tabindex: '0', 'aria-label': 'Result' });
     this.viewHost = h('div.view-host', { hidden: true });
-    this.errorBox = h('div.error', { role: 'alert', hidden: true });
+    // Error card: message / "line N, col M" / hint, with a "Jump to it" affordance when there is a position.
+    this.errorText = h('div.error-text');
+    this.errorJump = h('span.jump', {}, 'Jump to it', icon('arrowRight', 12));
+    this.errorBox = h('div.error', { role: 'alert', hidden: true }, this.errorText, this.errorJump);
     this.errorBox.addEventListener('click', () => this.jumpToError());
     this.notesEl = h('div.notes', { hidden: true });
     this.statusEl = h('span.panel-meta.status');
-    this.outputLabel = h('span.panel-label', {}, 'Output');
-    this.findInput = h<HTMLInputElement>('input.find-input', { type: 'search', placeholder: 'Find in output…', 'aria-label': 'Find in output', spellcheck: 'false' });
+    this.outputLabel = h('span.panel-label', {}, 'Result');
+    this.findInput = h<HTMLInputElement>('input.find-input', { type: 'search', placeholder: 'Find in result…', 'aria-label': 'Find in result', spellcheck: 'false' });
     this.findCount = h('span.find-count');
     this.findInput.addEventListener('input', () => this.applyFind(0));
     this.findInput.addEventListener('keydown', (e) => {
@@ -339,14 +360,15 @@ export class PaneView {
       {},
       this.outputLabel,
       this.statusEl,
+      h('span.status-busy', { 'aria-live': 'polite' }, 'Running…'),
       h('span.spacer'),
       this.findBox,
-      tbtn('copy', 'Copy', 'Copy output (Alt+Shift+C)', () => void this.copyOutput()),
-      tbtn('pipe', 'Send on', 'Open a new pane that keeps reading this output (a pipe)', () => this.sendOn()),
-      ibtn('settings', 'More output actions: find, download', (e) =>
+      tbtn('copy', 'Copy', 'Copy the result (Alt+Shift+C)', () => void this.copyOutput()),
+      tbtn('pipe', 'Send on', 'Open a new pane that keeps reading this result (a pipe)', () => this.sendOn()),
+      ibtn('settings', 'More result actions: find, download', (e) =>
         menu(e.currentTarget as HTMLElement, [
-          { icon: 'find', label: 'Find in output', keys: 'Alt+Shift+F', run: () => this.toggleFind(true) },
-          { icon: 'download', label: 'Download output', run: () => this.downloadOutput() },
+          { icon: 'find', label: 'Find in result', keys: 'Alt+Shift+F', run: () => this.toggleFind(true) },
+          { icon: 'download', label: 'Download result', run: () => this.downloadOutput() },
         ]),
       'output-more'),
     );
@@ -367,6 +389,7 @@ export class PaneView {
     this.infoPanel = h('aside.tool-info', { hidden: true, role: 'dialog', 'aria-label': 'About this tool' });
     this.el = h('section.pane', { 'data-pane-id': node.id, tabindex: '-1', role: 'region' }, title, this.optionsBar, this.body, this.explain.el, this.infoPanel);
     this.bindDrop();
+    this.bindInteractions();
 
     this.renderControls();
     this.applyDual();
@@ -382,11 +405,11 @@ export class PaneView {
   }
 
   private placeholderFor(which: 'a' | 'b'): string {
-    if (which === 'b') return 'Paste here, drop a file, or type…';
-    if (this.node.state.sourceId) return 'Waiting for output from the linked pane…';
+    if (which === 'b') return 'Paste, drop a file or type.';
+    if (this.node.state.sourceId) return 'Waiting for the linked pane to produce a result.';
     return this.node.state.mode === 'auto'
-      ? 'Paste anything — JSON, JWT, Base64, XML, YAML, CSV, a URL…\nc64 detects the format and picks the tool. Drop a file or press Ctrl+V.'
-      : 'Paste here, drop a file, or type…';
+      ? 'Paste anything. c64 picks the tool.\nJSON, JWT, Base64, XML, YAML, CSV, a URL, a cron line. Drop a file or press Ctrl+V.'
+      : 'Paste, drop a file or type.';
   }
 
   /* ---------------------------------------------------------- accessors */
@@ -405,10 +428,8 @@ export class PaneView {
     const dual = this.dual;
     this.editorsEl.classList.toggle('is-dual', dual);
     const [a, b] = this.mode.inputLabels ?? ['A', 'B'];
-    this.labelA.textContent = a;
-    this.labelB.textContent = b;
-    this.labelA.hidden = !dual;
-    this.labelB.hidden = !dual;
+    this.labelA.textContent = a === 'A' ? 'A' : `A · ${a}`;
+    this.labelB.textContent = b === 'B' ? 'B' : `B · ${b}`;
     this.textareaB.value = dual ? (this.node.state.inputB ?? '') : this.textareaB.value;
     this.textareaB.setAttribute('aria-label', dual ? `Input ${b}` : 'Second input');
     this.textarea.setAttribute('aria-label', dual ? `Input ${a}` : 'Input');
@@ -456,11 +477,11 @@ export class PaneView {
     if (src) this.linkChip.replaceChildren(icon('pipe', 12), h('span', {}, `from ${this.board.titleOf(src)}`), icon('close', 11));
   }
 
-  /** "Detected JSON · change" chip in the input head while Auto's choice stands. */
+  /** "Detected JSON — change" chip in the input head while Auto's choice stands. */
   private refreshDetectChip(): void {
     const on = this.node.state.detected === true && this.node.state.mode !== 'auto';
     this.detectChip.hidden = !on;
-    if (on) this.detectChip.replaceChildren(icon('sparkle', 12), h('span', {}, `Detected ${detectedName(this.node.state.mode) ?? this.mode.label} · change`));
+    if (on) this.detectChip.replaceChildren(icon('sparkle', 12), h('span', {}, `Detected ${detectedName(this.node.state.mode) ?? this.mode.label} — change`));
   }
 
   destroy(): void {
@@ -806,7 +827,7 @@ export class PaneView {
   private updateInputMeta(): void {
     const describe = (t: string) => {
       const lines = t.split('\n').length;
-      return `${t.length.toLocaleString()} chars · ${lines.toLocaleString()} line${lines === 1 ? '' : 's'}`;
+      return `${t.length.toLocaleString()} chars, ${lines.toLocaleString()} line${lines === 1 ? '' : 's'}`;
     };
     const a = this.node.state.input;
     const b = this.dual ? (this.node.state.inputB ?? '') : '';
@@ -814,7 +835,7 @@ export class PaneView {
       this.inputMeta.textContent = '';
       return;
     }
-    this.inputMeta.textContent = this.dual ? `A ${describe(a)} · B ${describe(b)}` : describe(a);
+    this.inputMeta.textContent = this.dual ? `A ${describe(a)}; B ${describe(b)}` : describe(a);
   }
 
   /* ---------------------------------------------------------------- gutter */
@@ -905,9 +926,9 @@ export class PaneView {
     const m = this.mode;
     this.modeIcon.replaceChildren(icon(m.icon, 16));
     this.descEl.textContent = m.description;
-    // The first three options stay on the row; the rest fold behind "Options ▾".
+    // The first two options stay on the row; the rest fold into the "Options ▾" popover.
     m.controls.forEach((c, i) => {
-      const into = i < 3 ? this.controlsEl : this.controlsExtra;
+      const into = i < 2 ? this.controlsEl : this.controlsExtra;
       switch (c.kind) {
         case 'select': {
           const sel = h<HTMLSelectElement>('select.control', { 'aria-label': c.label, title: c.label });
@@ -955,9 +976,16 @@ export class PaneView {
       }
     });
     this.prettySeg.hidden = !m.supportsPretty;
-    this.optionsMore.hidden = m.controls.length <= 3;
-    if (m.controls.length <= 3) this.toggleOptions(false);
+    this.optionsMore.hidden = m.controls.length <= 2;
+    if (m.controls.length <= 2) this.toggleOptions(false);
     this.runBtn.textContent = primaryLabel(m, s.options);
+    // No Pretty/Raw and no controls: drop the options row and keep the action in the input head.
+    const bare = !m.supportsPretty && m.controls.length === 0;
+    this.optionsBar.hidden = bare;
+    this.runSlot.hidden = !bare;
+    if (bare) this.runSlot.append(this.runBtn);
+    else if (this.runBtn.parentElement === this.runSlot) this.optionsBar.querySelector('.options-row')?.append(this.runBtn);
+    this.runBtn.classList.toggle('in-head', bare);
   }
 
   private updatePrettyButton(): void {
@@ -989,7 +1017,7 @@ export class PaneView {
   /**
    * Empty-state strip under the editor. Two faces, one at a time:
    *   .start-chips  — Auto detect: a row of common tools + "All N tools ›";
-   *   .picker-ready — any other tool: its hint and a "Try a sample" button.
+   *   .picker-ready — any other tool: its hint and an "Insert a sample" button.
    */
   private buildPicker(): HTMLElement {
     const chips = h('div.start-chips', { hidden: true });
@@ -1002,19 +1030,22 @@ export class PaneView {
       });
       chips.append(chip);
     }
-    const all = h('button.start-chip.start-all', { type: 'button', title: 'Open the command palette (⌘/Ctrl+K)' }, `All ${MODES.length} tools ›`);
+    const all = h('button.start-chip.start-all', { type: 'button', title: 'Open the command palette (⌘/Ctrl+K)' }, `All ${MODES.length} tools`);
     all.addEventListener('click', () => document.dispatchEvent(new CustomEvent('c64:palette')));
     chips.append(all);
 
-    const sampleBtn = h('button.btn.primary', { type: 'button' }, icon('sparkle', 14), h('span', {}, 'Try a sample'));
+    const sampleBtn = h('button.btn.small', { type: 'button' }, icon('sparkle', 14), h('span', {}, 'Insert a sample'));
     sampleBtn.addEventListener('click', () => this.insertSample());
     const ready = h('div.picker-ready', { hidden: true }, h('p.picker-hint'), sampleBtn);
     return h('div.picker', { hidden: true }, chips, ready);
   }
 
   private renderResult(r: ModeResult): void {
-    this.statusEl.textContent = r.status ?? '';
+    // Status grammar: "Verdict — fact, fact" (modes still emit " · " chains).
+    const [verdict, ...facts] = (r.status ?? '').split(' · ');
+    this.statusEl.textContent = facts.length ? `${verdict} — ${facts.join(', ')}` : (verdict ?? '');
     this.statusEl.classList.toggle('is-error', !!r.error);
+    this.statusEl.classList.toggle('is-warn', !r.error && !!r.notes?.length);
 
     // Tear down the previous rich view, if any.
     this.viewCleanup?.();
@@ -1048,20 +1079,14 @@ export class PaneView {
       this.viewHost.hidden = true;
       if (this.findInput.value) this.applyFind(0);
     }
-    const labels: Record<string, string> = {
-      'json-tree': 'Tree', 'json-path': 'Tree & path', 'json-graph': 'Graph', jwt: 'Decoded token', table: 'Table',
-      url: 'URL breakdown', 'case-all': 'All cases', hash: 'Digests', basen: 'Bases', timestamp: 'Dates', uuid: 'Decoded ids',
-      diff: 'Differences', regex: 'Matches', markdown: 'Preview', stats: 'Statistics', cron: 'Schedule', color: 'Colors',
-      'struct-diff': 'Differences', 'list-compare': 'Sets', 'schema-errors': 'Validation', qr: 'QR code', totp: 'One-time code',
-      units: 'Conversions', subnet: 'Subnets', 'data-url': 'File', chmod: 'Permissions',
-    };
-    this.outputLabel.textContent = r.view && !r.error ? labels[r.view.kind] ?? 'Output' : 'Output';
+    this.outputLabel.textContent = 'Result';
 
     if (r.error) {
-      const where = r.error.line ? ` — line ${r.error.line}, col ${r.error.col}` : '';
-      this.errorBox.replaceChildren(h('strong', {}, r.error.message + where));
-      if (r.error.hint) this.errorBox.append(h('span.hint', {}, r.error.hint));
-      if (r.error.line) this.errorBox.append(h('span.jump', {}, 'Click to jump to it'));
+      this.errorText.replaceChildren(h('strong', {}, r.error.message));
+      if (r.error.line) this.errorText.append(h('span.where', {}, `line ${r.error.line}, col ${r.error.col ?? 1}`));
+      if (r.error.hint) this.errorText.append(h('span.hint', {}, r.error.hint));
+      this.errorJump.hidden = !r.error.line;
+      this.errorBox.classList.toggle('is-jumpable', !!r.error.line);
       this.errorBox.hidden = false;
     } else {
       this.errorBox.hidden = true;
@@ -1073,6 +1098,7 @@ export class PaneView {
     } else {
       this.notesEl.hidden = true;
     }
+    this.el.dispatchEvent(new CustomEvent('c64:rendered'));
   }
 
   /** Render text output with syntax colours for the mode's declared language. */
@@ -1198,4 +1224,143 @@ export class PaneView {
       this.board.changed();
     });
   }
+
+  /* ---- interactions (Lane C) ---- */
+
+  private viewAsSeg: HTMLElement | undefined;
+  private viewAsHost: HTMLElement | undefined;
+  private viewAsCleanup: (() => void) | undefined;
+
+  /** Drag grip, View as, inline copy, tab order — see src/pane-interactions.ts. */
+  private bindInteractions(): void {
+    // Grip: Lane A renders span.pane-grip.multi; create one only if missing.
+    const titleBar = this.el.querySelector<HTMLElement>('.pane-title');
+    let grip = titleBar?.querySelector<HTMLElement>('.pane-grip') ?? null;
+    if (!grip && titleBar) {
+      grip = h('span.pane-grip.multi', { title: 'Drag to move this pane', 'aria-hidden': 'true' });
+      titleBar.prepend(grip);
+    }
+    if (grip) {
+      bindDragReorder({
+        pane: this.el,
+        grip,
+        onDrop: (targetId, edge) => this.el.dispatchEvent(new CustomEvent('c64:move', { bubbles: true, detail: { paneId: this.node.id, targetId, edge } })),
+      });
+    }
+
+    // Rich view roots are tab stops like the text result.
+    this.viewHost.tabIndex = 0;
+    this.viewAsHost = h('div.view-host.view-as-host', { hidden: true, tabindex: '0', 'aria-label': 'Result view' });
+    this.viewHost.after(this.viewAsHost);
+    this.el.addEventListener('c64:rendered', () => this.applyViewAs());
+
+    // Copy: confirm on the button itself, not with a toast.
+    const copyBtn = this.outputWrap.querySelector<HTMLElement>('.panel-head button[aria-label="Copy"]')
+      ?? Array.from(this.outputWrap.querySelectorAll<HTMLElement>('.panel-head button')).find((b) => b.textContent?.trim() === 'Copy');
+    if (copyBtn) interceptCopy(copyBtn, () => this.outputText, () => toast('Nothing to copy yet'));
+    // Run: Shift+click runs and copies, confirmed on the Run button.
+    this.runBtn.addEventListener(
+      'click',
+      (e) => {
+        if (!e.shiftKey) return;
+        e.stopImmediatePropagation();
+        this.runPrimary(false);
+        setTimeout(() => {
+          if (this.outputText) void copyInline(this.runBtn, this.outputText);
+          else toast('Nothing to copy yet');
+        }, 0);
+      },
+      { capture: true },
+    );
+  }
+
+  /** Escape chain inside the pane: find → explain / info. True when something closed. */
+  escapeInPane(): boolean {
+    if (!this.findBox.hidden) {
+      this.toggleFind(false);
+      this.output.focus();
+      return true;
+    }
+    if (!this.explain.el.hidden) {
+      this.explain.toggle(false);
+      this.textarea.focus();
+      return true;
+    }
+    if (!this.infoPanel.hidden) {
+      this.toggleInfo(false);
+      this.textarea.focus();
+      return true;
+    }
+    return false;
+  }
+
+  /** Persisted View as choice (Text unless set). */
+  get viewAs(): ViewAs {
+    return this.node.state.viewAs ?? 'text';
+  }
+
+  setViewAs(v: ViewAs): void {
+    this.node.state.viewAs = v === 'text' ? undefined : v;
+    this.board.changed();
+    this.applyViewAs();
+  }
+
+  /**
+   * After each render: when the tool's output language is JSON and the text
+   * parses, offer Text | Tree | Table in the result head and, for Tree or
+   * Table, swap the <pre> for the json-tree / table renderer on the output.
+   */
+  private applyViewAs(): void {
+    const r = this.lastResult;
+    const m = this.mode;
+    const s = this.node.state;
+    const lang = typeof m.outputLanguage === 'function' ? m.outputLanguage({ pretty: s.pretty, options: s.options }) : m.outputLanguage;
+    const host = this.viewAsHost!;
+    const teardown = () => {
+      this.viewAsCleanup?.();
+      this.viewAsCleanup = undefined;
+      host.replaceChildren();
+      host.hidden = true;
+    };
+    const parsed = lang === 'json' && !r.error && !r.view ? parseJsonOutput(r.output) : undefined;
+    if (!parsed) {
+      teardown();
+      this.viewAsSeg?.remove();
+      this.viewAsSeg = undefined;
+      return;
+    }
+    if (!this.viewAsSeg) {
+      this.viewAsSeg = buildViewAs((v) => this.setViewAs(v));
+      this.statusEl.after(this.viewAsSeg);
+    }
+    const table = tableFromJson(parsed.value);
+    const want: ViewAs = this.viewAs === 'table' && !table ? 'text' : this.viewAs;
+    paintViewAs(this.viewAsSeg, want, table !== null);
+    teardown();
+    if (want === 'text') {
+      this.output.hidden = false;
+      return;
+    }
+    const ctx: ViewContext = {
+      input: this.node.state.input,
+      options: this.node.state.options,
+      copy: (text, what) => void copyText(text).then((ok) => toast(ok ? `Copied ${what}` : 'Copy failed')),
+      selectInEditor: () => undefined,
+      setOption: (key, value) => this.setOption(key, value),
+      toast,
+    };
+    try {
+      const renderer = want === 'tree' ? VIEWS['json-tree'] : VIEWS['table'];
+      const data = want === 'tree' ? { value: parsed.value, spans: new Map<string, [number, number]>() } : table;
+      const cleanup = renderer!(host, data, ctx);
+      if (typeof cleanup === 'function') this.viewAsCleanup = cleanup;
+      host.hidden = false;
+      this.output.hidden = true;
+    } catch {
+      teardown();
+      this.output.hidden = false;
+    }
+  }
+
+  /* ---- end interactions ---- */
 }

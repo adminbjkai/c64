@@ -1,11 +1,13 @@
 /**
  * QR renderer: the code drawn as an inline <svg> built with createElementNS,
- * Download SVG / PNG buttons and the encoded payload underneath.
+ * Download SVG / PNG and Copy SVG in the bar, details and the copyable
+ * payload underneath.
  */
 
 import { h } from '../ui.js';
 import type { QrData } from '../modes/qr-code.js';
 import type { ViewRenderer } from './types.js';
+import { viewShell, section, kvTable, copyable, copyButton, plural } from './ui.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -48,8 +50,6 @@ function download(blob: Blob, name: string): void {
 
 export const renderQr: ViewRenderer = (host, raw, ctx) => {
   const d = raw as QrData;
-  const svgEl = buildSvg(d);
-  const figure = h('div.qr-figure', {}, svgEl);
 
   const dlSvg = h('button.btn.small', { type: 'button' }, 'Download SVG');
   dlSvg.addEventListener('click', () => download(new Blob([d.svg], { type: 'image/svg+xml' }), 'qr-code.svg'));
@@ -62,7 +62,10 @@ export const renderQr: ViewRenderer = (host, raw, ctx) => {
       canvas.width = d.px;
       canvas.height = d.px;
       const g = canvas.getContext('2d');
-      if (!g) { ctx.toast('Canvas is not available'); return; }
+      if (!g) {
+        ctx.toast('Canvas is not available');
+        return;
+      }
       g.drawImage(img, 0, 0, d.px, d.px);
       canvas.toBlob((blob) => {
         if (blob) download(blob, 'qr-code.png');
@@ -73,15 +76,21 @@ export const renderQr: ViewRenderer = (host, raw, ctx) => {
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(d.svg);
   });
 
-  const copySvg = h('button.btn.small', { type: 'button' }, 'Copy SVG');
-  copySvg.addEventListener('click', () => ctx.copy(d.svg, 'SVG'));
-  const copyPayload = h('button.btn.small', { type: 'button' }, 'Copy payload');
-  copyPayload.addEventListener('click', () => ctx.copy(d.payload, 'payload'));
-
-  host.append(
-    figure,
-    h('div.qr-actions', {}, dlSvg, dlPng, copySvg),
-    h('div.qr-meta', {}, h('span.badge.muted', {}, `Version ${d.version}`), h('span.muted', {}, ` · ${d.size}×${d.size} · ECC ${d.ecc} · mask ${d.mask} · ${d.mode} · ${d.bytes} bytes`)),
-    h('div.qr-payload', {}, h('div.qr-payload-head', {}, h('span.muted', {}, 'Payload'), copyPayload), h('pre.qr-payload-text', {}, d.payload)),
+  const { body } = viewShell(host, { actions: [dlSvg, dlPng, copyButton('Copy SVG', () => d.svg)] });
+  body.append(
+    h('div.qr-figure', {}, buildSvg(d)),
+    section(
+      'Details',
+      {},
+      kvTable([
+        { label: 'Version', value: String(d.version), copy: false },
+        { label: 'Size', value: `${d.size} × ${d.size} modules`, copy: false },
+        { label: 'Error correction', value: d.ecc, copy: false },
+        { label: 'Mask', value: String(d.mask), copy: false },
+        { label: 'Mode', value: d.mode, copy: false },
+        { label: 'Encoded', value: plural(d.bytes, 'byte'), copy: false },
+      ]),
+    ),
+    section('Payload', {}, h('div.qr-payload', {}, copyable(d.payload, { label: 'payload' }))),
   );
 };

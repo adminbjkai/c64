@@ -8,9 +8,9 @@
 // VERSION is stamped from package.json by scripts/sync-version.mjs. Bumping
 // it retires the previous cache on activation.
 
-const VERSION = '1.2.1';
+const VERSION = '1.3.0';
 const CACHE = `c64-${VERSION}`;
-const SHELL = ['/', '/public/styles.css', '/icon.svg', '/manifest.webmanifest'];
+const SHELL = ['/', '/public/styles.css', '/public/interactions.css', '/public/fonts/JetBrainsMono[wght]-latin.woff2', '/public/fonts/JetBrainsMono-Italic[wght]-latin.woff2', '/icon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
