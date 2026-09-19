@@ -167,6 +167,8 @@ export class PaneView {
   private viewCleanup: (() => void) | undefined;
   private lastResult: ModeResult = { output: '' };
   private findIndex = 0;
+  /** Option keys written by auto-detect; removed again on Clear or a manual tool pick. */
+  private detectedOptionKeys: string[] = [];
 
   constructor(
     readonly node: PaneNode,
@@ -474,6 +476,7 @@ export class PaneView {
    * clears `detected`; Auto detect passes `detected: true` so the chip shows.
    */
   setMode(id: string, opts: { detected?: boolean } = {}): void {
+    if (opts.detected !== true) this.forgetDetectedOptions();
     this.node.state.mode = id;
     this.node.state.detected = opts.detected === true ? true : undefined;
     this.modeSelect.value = id;
@@ -727,15 +730,23 @@ export class PaneView {
     this.renderGutter();
     this.board.changed();
     this.explain.refresh();
-    if (this.node.state.mode === 'auto' && !this.node.state.detected && this.detect()) return; // setMode ran it
+    if ((this.node.state.mode === 'auto' || this.node.state.detected) && this.detect()) return; // setMode ran it
     if (this.runTimer !== undefined) clearTimeout(this.runTimer);
     this.runTimer = window.setTimeout(() => this.runNow(), DEBOUNCE_MS);
+  }
+
+  /** Drop the options auto-detect wrote so they never leak into a manual pick. */
+  private forgetDetectedOptions(): void {
+    for (const k of this.detectedOptionKeys) delete this.node.state.options[k];
+    this.detectedOptionKeys = [];
   }
 
   /**
    * Auto detect: once the input is non-trivial, ask the Explain heuristics
    * what it is and switch to the matching tool (keeping `detected` so the
-   * chip shows). Returns true when the pane switched.
+   * chip shows). While the pane is still in a detected (not manually chosen)
+   * tool, typing more may change the verdict — e.g. a JWT looks like Base64
+   * for its first characters. Returns true when the pane switched.
    */
   private detect(): boolean {
     const text = this.node.state.input.trim();
@@ -748,7 +759,12 @@ export class PaneView {
       return false;
     }
     if (!d) return false;
-    if (d.options) Object.assign(this.node.state.options, d.options);
+    if (this.node.state.detected && d.mode === this.node.state.mode) return false;
+    this.forgetDetectedOptions();
+    if (d.options) {
+      Object.assign(this.node.state.options, d.options);
+      this.detectedOptionKeys = Object.keys(d.options);
+    }
     this.setMode(d.mode, { detected: true });
     return true;
   }
@@ -986,7 +1002,7 @@ export class PaneView {
       });
       chips.append(chip);
     }
-    const all = h('button.start-chip.start-all', { type: 'button', title: 'Open the command palette (⌘/Ctrl+K)' }, `All ${MODES.length - 1} tools ›`);
+    const all = h('button.start-chip.start-all', { type: 'button', title: 'Open the command palette (⌘/Ctrl+K)' }, `All ${MODES.length} tools ›`);
     all.addEventListener('click', () => document.dispatchEvent(new CustomEvent('c64:palette')));
     chips.append(all);
 

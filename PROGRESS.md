@@ -39,6 +39,16 @@
 | R2-8 | Shell: highlighting, favourites/recent, info panel, swap, data-URL uploads | browser check | ✅ | 24 hl spans, favourites section, no errors (screenshot) |
 | R2-9 | Register + style all lanes, docs/README/CHANGELOG, screenshots, v1.1.0 release, deploy | verifier PASS, CI green, live | ✅ | verifier PASS (3 minor gaps fixed in v1.1.1: plus icon, Text Diff category, stale comment); CI success main + v1.1.0; release asset c64-v1.1.0.tar.gz; live healthz 1.1.x |
 
+## Round 3 (2026-09-19) — v1.2: paste-first UX
+
+| # | Stage | Acceptance | Status | Evidence |
+|---|---|---|---|---|
+| R3-1 | UX spec from jsonformatter / base64decode / jsoncrack / prettier | decided design | ✅ | specialist brief (editor 108px → dominant) |
+| R3-2 | Auto detect tool, smart detection, primary button, chrome reduction, side-by-side default | tests + smoke + screenshots | ✅ | 683/683; SMOKE OK 54 tools … auto-detect; first-visit screenshots reviewed |
+| R3-3 | JSON Graph rebuilt (canvas, pill, search, drawer, collapse) | tests + screenshots | ✅ | graph tests 10/10; /tmp/graph.png reviewed |
+| R3-4 | Release v1.2.0, deploy, verify | verifier PASS, CI, live | ✅ | verifier PASS-with-concerns; CI success; healthz 1.2.0 |
+| R3-5 | Patch v1.2.1: option leak, re-detect while typing, Pretty/Raw in Auto, chip count | repro passes | ✅ | repro script: manual Base64 → "Decode / Encode", direction auto, 0 errors |
+
 ## Decisions log
 - Keep zero runtime deps and no bundler (auditability is the product's point). Hash mode uses WebCrypto (async) → `run` may return a Promise. (2026-09-18)
 - Lanes must not edit shared registries (modes/index.ts, views/index.ts, icons.ts, types.ts); orchestrator wires them. (2026-09-18)

@@ -6,6 +6,14 @@ All notable changes to c64 are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.2.1] — 2026-09-19
+
+### Fixed
+- Options written by Auto detect (e.g. Base64 direction) no longer leak into a later manual tool pick or survive Clear.
+- Auto detect keeps re-evaluating while you type until you pick a tool yourself, so a JWT is no longer locked in as Base64 after its first characters.
+- The Pretty / Raw switch is hidden in Auto detect, where it has nothing to act on.
+- The landing chip counts all tools including Auto detect, matching the docs.
+
 ## [1.2.0] — 2026-09-19
 
 Paste-first redesign, planned against jsonformatter.org, base64decode.org,
@@ -143,7 +151,8 @@ Initial workspace: JSON format/validate, tree, path and graph views, XML,
 YAML, CSV/TSV, Convert, Base64, JWT decode, Minify/Prettify and CSS, in
 tileable panes with a Web Worker for large inputs and an Explain helper.
 
-[Unreleased]: https://github.com/adminbjkai/c64/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/adminbjkai/c64/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/adminbjkai/c64/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/adminbjkai/c64/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/adminbjkai/c64/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/adminbjkai/c64/compare/v1.0.0...v1.1.0

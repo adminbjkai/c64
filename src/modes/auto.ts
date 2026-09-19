@@ -26,7 +26,7 @@ export const autoMode: ToolMode = {
   emptyHint: 'Paste anything — JSON, JWT, Base64, XML, YAML, CSV, a URL…',
   sample: jsonMode.sample,
   outputLanguage: 'json',
-  supportsPretty: true,
+  supportsPretty: false,
   controls: [],
   run: runAuto,
 };

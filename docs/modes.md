@@ -10,7 +10,7 @@ Pretty / Raw is the switch in every pane's option bar: *Pretty* is the formatted
 
 | Tool | What it does | Pretty / Raw | Options |
 |---|---|---|---|
-| **Auto detect** <br><sub>`auto`</sub> | Paste anything — c64 recognises the format and picks the right tool. | yes | — |
+| **Auto detect** <br><sub>`auto`</sub> | Paste anything — c64 recognises the format and picks the right tool. | — | — |
 
 ## JSON
 
