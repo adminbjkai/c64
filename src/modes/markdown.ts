@@ -76,6 +76,7 @@ export const answer = 42;
 Line one with a hard break\\
 line two.
 `,
+  outputLanguage: 'html',
   supportsPretty: true,
   controls: [{ kind: 'toggle', key: 'showHtml', label: 'Show HTML', default: false }],
   run: runMarkdown,

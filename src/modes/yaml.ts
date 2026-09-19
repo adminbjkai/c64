@@ -29,6 +29,7 @@ export const yamlMode: ToolMode = {
   icon: 'yaml',
   emptyHint: 'Paste YAML to validate and reformat it. Raw shows the equivalent JSON.',
   sample: 'service: api\nversion: 3\nhealthy: true\nregions:\n  - us-east-1\n  - eu-west-2\nlimits:\n  rps: 1200\n  burst: null\ndescription: >\n  Folded text keeps\n  reading nicely.\n',
+  outputLanguage: (ctx) => (ctx.pretty ? 'yaml' : 'json'),
   supportsPretty: true,
   controls: [
     {

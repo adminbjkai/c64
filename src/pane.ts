@@ -19,6 +19,7 @@ import { VIEWS, type ViewContext } from './views/index.js';
 import { runMode } from './runner.js';
 import { ExplainPanel } from './explain-ui.js';
 import { icon } from './icons.js';
+import { highlightInto } from './highlight.js';
 import { h, toast, copyText, menu, type MenuItem } from './ui.js';
 
 /** What a pane needs from the board. Kept minimal so pane.ts stays decoupled. */
@@ -89,6 +90,8 @@ export class PaneView {
   private readonly editorsEl: HTMLElement;
   private readonly labelA: HTMLElement;
   private readonly labelB: HTMLElement;
+  private readonly swapBtn: HTMLButtonElement;
+  private readonly infoPanel: HTMLElement;
   /** Which editor the Paste / Upload buttons target (the last one focused). */
   private target: 'a' | 'b' = 'a';
   private readonly output: HTMLPreElement;
@@ -149,6 +152,7 @@ export class PaneView {
     this.layoutBtn = ibtn('columns', '', () => this.toggleLayout());
     this.zoomBtn = ibtn('maximize', 'Maximise this pane (Alt+Shift+Enter)', () => board.zoom(node.id), 'zoom-btn');
     const explainBtn = tbtn('bulb', 'Explain', 'What is this input? Local analysis, no server (Alt+Shift+E)', () => this.toggleExplain());
+    const infoBtn = ibtn('help', 'About this tool: what it does, its options and limits', () => this.toggleInfo(), 'info-btn');
     const moreBtn = ibtn('settings', 'More pane actions', (e) => this.openMenu(e.currentTarget as HTMLElement), 'more-btn');
     const addRightBtn = ibtn('splitRight', 'Add pane to the right (Alt+Shift+R)', () => board.addRight(node.id));
     const addBelowBtn = ibtn('splitDown', 'Add pane below (Alt+Shift+B)', () => board.addBelow(node.id));
@@ -162,6 +166,7 @@ export class PaneView {
       this.descEl,
       h('span.spacer'),
       explainBtn,
+      infoBtn,
       this.layoutBtn,
       this.zoomBtn,
       moreBtn,
@@ -214,6 +219,8 @@ export class PaneView {
     };
     [this.textarea, this.gutter] = makeEditor('a');
     [this.textareaB, this.gutterB] = makeEditor('b');
+    this.swapBtn = tbtn('swapAb', 'Swap', 'Swap the two inputs', () => this.swapInputs());
+    this.swapBtn.hidden = true;
     this.labelA = h('span.editor-label', {}, 'A');
     this.labelB = h('span.editor-label', {}, 'B');
 
@@ -234,6 +241,7 @@ export class PaneView {
       this.linkChip,
       this.inputMeta,
       h('span.spacer'),
+      this.swapBtn,
       tbtn('paste', 'Paste', 'Paste from clipboard', () => void this.pasteFromClipboard()),
       tbtn('upload', 'Upload', 'Open a local file — it never leaves your browser', () => fileInput.click()),
       tbtn('sparkle', 'Sample', 'Insert an example for this tool', () => this.insertSample()),
@@ -305,7 +313,8 @@ export class PaneView {
         this.textarea.focus();
       },
     });
-    this.el = h('section.pane', { 'data-pane-id': node.id, tabindex: '-1', role: 'region' }, title, this.optionsBar, this.body, this.explain.el);
+    this.infoPanel = h('aside.tool-info', { hidden: true, role: 'dialog', 'aria-label': 'About this tool' });
+    this.el = h('section.pane', { 'data-pane-id': node.id, tabindex: '-1', role: 'region' }, title, this.optionsBar, this.body, this.explain.el, this.infoPanel);
     this.bindDrop();
 
     this.renderControls();
@@ -343,8 +352,10 @@ export class PaneView {
     this.textareaB.value = dual ? (this.node.state.inputB ?? '') : this.textareaB.value;
     this.textareaB.setAttribute('aria-label', dual ? `Input ${b}` : 'Second input');
     this.textarea.setAttribute('aria-label', dual ? `Input ${a}` : 'Input');
+    this.swapBtn.hidden = !dual;
     if (!dual) this.target = 'a';
     this.renderGutter();
+    if (!this.infoPanel.hidden) this.renderInfo();
   }
 
   get outputText(): string {
@@ -461,6 +472,57 @@ export class PaneView {
     this.applyWrap();
     this.board.changed();
     toast(this.node.state.wrap ? 'Wrapping long lines' : 'Long lines scroll');
+  }
+
+  /** Two-input tools: exchange A and B. */
+  swapInputs(): void {
+    if (!this.dual) return;
+    const a = this.textarea.value;
+    this.textarea.value = this.textareaB.value;
+    this.textareaB.value = a;
+    this.onInput();
+    toast('Inputs swapped');
+  }
+
+  toggleInfo(force?: boolean): void {
+    const open = force ?? this.infoPanel.hidden;
+    this.infoPanel.hidden = !open;
+    if (open) {
+      this.renderInfo();
+      this.infoPanel.querySelector<HTMLElement>('button')?.focus();
+    }
+  }
+
+  /** The "?" panel: what the tool does, its options, keywords and a docs link. */
+  private renderInfo(): void {
+    const m = this.mode;
+    const s = this.node.state;
+    const close = ibtn('close', 'Close', () => this.toggleInfo(false));
+    const optionValue = (c: (typeof m.controls)[number]): string => {
+      const v = s.options[c.key];
+      if (c.kind === 'toggle') return (typeof v === 'boolean' ? v : c.default) ? 'on' : 'off';
+      if (c.kind === 'select') return c.options.find((o) => o.value === (typeof v === 'string' ? v : c.default))?.label ?? String(c.default);
+      return typeof v === 'string' && v ? v : c.default || '—';
+    };
+    const rows = m.controls.map((c) => h('tr', {}, h('td', {}, c.label), h('td', {}, h('code', {}, optionValue(c)))));
+    const sample = h('button.btn.small', { type: 'button' }, icon('sparkle', 12), h('span', {}, 'Try the sample'));
+    sample.addEventListener('click', () => this.insertSample());
+    const docs = h<HTMLAnchorElement>('a.btn.small', { href: `https://github.com/adminbjkai/c64/blob/main/docs/modes.md#${m.category.toLowerCase().replace(/[^a-z]+/g, '-')}`, target: '_blank', rel: 'noopener' }, icon('external', 12), h('span', {}, 'Docs'));
+    this.infoPanel.replaceChildren(
+      h('div.explain-title', {}, icon(m.icon, 14), h('strong', {}, m.label), h('span.muted', {}, ` · ${m.category}`), h('span.spacer'), close),
+      h(
+        'div.explain-body',
+        {},
+        h('p.info-desc', {}, m.description),
+        h('p.muted', {}, m.emptyHint),
+        m.inputs === 2 ? h('p.muted', {}, `Takes two inputs: ${(m.inputLabels ?? ['A', 'B']).join(' and ')}.`) : null,
+        rows.length ? h('table.info-options', {}, h('tbody', {}, ...rows)) : h('p.muted', {}, 'This tool has no options.'),
+        m.supportsPretty ? h('p.muted', {}, 'Pretty shows the formatted result, Raw the minified or literal one.') : null,
+        m.keywords?.length ? h('p.info-keywords', {}, ...m.keywords.map((k) => h('span.badge', {}, k))) : null,
+        h('div.explain-suggestions', {}, sample, docs),
+        h('p.muted.info-foot', {}, 'Runs entirely in this tab. Nothing you paste is sent anywhere.'),
+      ),
+    );
   }
 
   toggleExplain(): void {
@@ -586,8 +648,22 @@ export class PaneView {
   }
 
   private async loadFile(f: File): Promise<void> {
-    const text = await f.text();
     if (this.node.state.sourceId && this.target === 'a') this.board.link(this.node.id, null);
+    const binary = f.type ? !/^text\/|json|xml|yaml|javascript|csv|sql|svg/i.test(f.type) : /\.(png|jpe?g|gif|webp|pdf|zip|gz|woff2?|mp3|mp4|ico|bin)$/i.test(f.name);
+    if (binary || this.node.state.mode === 'data-url') {
+      // Binary files become a data URL so the Data URL tool can inspect them.
+      const url = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(f);
+      });
+      if (this.node.state.mode !== 'data-url' && MODES.some((m) => m.id === 'data-url')) this.setMode('data-url');
+      this.setInput(url, this.dual ? this.target : 'a');
+      toast(`Loaded ${f.name} (${f.size.toLocaleString()} bytes) as a data URL — stays in your browser`);
+      return;
+    }
+    const text = await f.text();
     this.setInput(text, this.dual ? this.target : 'a');
     toast(`Loaded ${f.name} (${f.size.toLocaleString()} bytes) — stays in your browser`);
   }
@@ -657,7 +733,7 @@ export class PaneView {
     const q = this.findInput.value;
     const text = this.lastResult.output;
     if (!q || !text || this.output.hidden) {
-      this.output.textContent = text;
+      this.paintOutput(text);
       this.findCount.textContent = q && !this.output.hidden ? '0' : '';
       return;
     }
@@ -670,7 +746,7 @@ export class PaneView {
       i = lower.indexOf(needle, i + needle.length);
     }
     if (!hits.length) {
-      this.output.textContent = text;
+      this.paintOutput(text);
       this.findCount.textContent = '0';
       return;
     }
@@ -855,11 +931,11 @@ export class PaneView {
       } catch (e) {
         this.viewHost.hidden = true;
         this.output.hidden = false;
-        this.output.textContent = r.output;
+        this.paintOutput(r.output);
         r = { ...r, notes: [...(r.notes ?? []), `The rich view failed to render (${(e as Error).message}); showing text instead.`] };
       }
     } else {
-      this.output.textContent = r.output;
+      this.paintOutput(r.output);
       this.output.hidden = !!r.error;
       this.viewHost.hidden = true;
       if (this.findInput.value) this.applyFind(0);
@@ -887,6 +963,14 @@ export class PaneView {
     } else {
       this.notesEl.hidden = true;
     }
+  }
+
+  /** Render text output with syntax colours for the mode's declared language. */
+  private paintOutput(text: string): void {
+    const m = this.mode;
+    const s = this.node.state;
+    const lang = typeof m.outputLanguage === 'function' ? m.outputLanguage({ pretty: s.pretty, options: s.options }) : m.outputLanguage;
+    highlightInto(this.output, text, lang);
   }
 
   /** Select a range in the editor and scroll it into view. */

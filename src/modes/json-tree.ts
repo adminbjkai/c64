@@ -83,6 +83,7 @@ export const jsonTreeMode: ToolMode = {
   icon: 'tree',
   emptyHint: 'Paste JSON to explore it as a collapsible tree. Click a node to select it in the editor.',
   sample: SAMPLE,
+  outputLanguage: 'json',
   supportsPretty: false,
   controls: [],
   run: runJsonTree,

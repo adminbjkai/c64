@@ -94,6 +94,7 @@ export const jsonMode: ToolMode = {
   icon: 'braces',
   emptyHint: 'Paste JSON to format and validate it. Trailing commas and smart quotes are tolerated.',
   sample: '{"service":"api","version":3,"healthy":true,"regions":["us-east-1","eu-west-2"],"limits":{"rps":1200,"burst":null}}',
+  outputLanguage: 'json',
   supportsPretty: true,
   controls: [
     {

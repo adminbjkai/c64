@@ -47,6 +47,7 @@ export const queryStringMode: ToolMode = {
   keywords: ['querystring', 'params', 'form', 'search', 'urlencoded', 'qs'],
   emptyHint: 'Paste a query string, a full URL or a JSON object — the direction is auto-detected.',
   sample: 'https://example.com/list?page=2&sort=name&tag=a&tag=b&filter[status]=open&filter[owner]=me&ids[]=7&ids[]=9&q=hello+world&empty=',
+  outputLanguage: (ctx) => (typeof ctx.options['direction'] === 'string' && ctx.options['direction'] === 'toQuery' ? undefined : 'json'),
   supportsPretty: true,
   controls: [
     {

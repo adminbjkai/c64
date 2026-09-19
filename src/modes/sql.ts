@@ -31,6 +31,7 @@ export const sqlMode: ToolMode = {
   emptyHint: 'Paste SQL to format it. Raw minifies to one line per statement.',
   sample:
     "select u.id, u.name, count(o.id) as orders, sum(o.total) as spent from users u left join orders o on o.user_id = u.id where u.active = 1 and u.created_at >= '2024-01-01' and u.id in (select user_id from subscriptions where plan <> 'free') group by u.id, u.name having count(o.id) > 0 order by spent desc limit 10;\ninsert into audit_log (user_id, action) values (1, 'login'), (2, 'logout');",
+  outputLanguage: 'sql',
   supportsPretty: true,
   controls: [
     {

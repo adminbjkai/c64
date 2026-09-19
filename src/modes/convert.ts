@@ -104,6 +104,7 @@ export const convertMode: ToolMode = {
   icon: 'convert',
   emptyHint: 'Paste JSON, XML, YAML or CSV, pick a target format, copy the result.',
   sample: '[{"sku":"K-1","name":"Keyboard","qty":1,"price":99.5},{"sku":"M-2","name":"Mouse","qty":2,"price":25}]',
+  outputLanguage: (ctx) => ({ json: 'json', xml: 'xml', yaml: 'yaml', toml: 'toml' } as const)[String(ctx.options['to'] ?? 'yaml')],
   supportsPretty: false,
   controls: [
     { kind: 'select', key: 'from', label: 'From', default: 'auto', options: [{ value: 'auto', label: 'From: auto' }, ...FORMAT_OPTIONS] },

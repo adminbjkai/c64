@@ -9,6 +9,8 @@
  * equivalent so Copy always has something sensible to copy.
  */
 
+export type OutputLanguage = 'json' | 'xml' | 'html' | 'yaml' | 'css' | 'sql' | 'toml' | 'markdown' | 'typescript' | 'python' | 'go';
+
 export interface Diagnostic {
   message: string;
   /** 1-based, when the parser can pinpoint the problem. */
@@ -81,6 +83,11 @@ export interface ToolMode {
   controls: ModeControl[];
   /** Whether the Raw/Pretty toggle changes anything for this mode. */
   supportsPretty: boolean;
+  /**
+   * Language used to syntax-highlight the text output, or a function of the
+   * run context when it depends on options / Pretty. Omit for plain text.
+   */
+  outputLanguage?: OutputLanguage | ((ctx: RunContext) => OutputLanguage | undefined);
   /**
    * Pure transform. May return a Promise when the work is inherently async
    * (e.g. WebCrypto digests); the runner and worker await either form.

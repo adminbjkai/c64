@@ -7,7 +7,7 @@
 import { Board } from './board.js';
 import { loadBoards, saveBoards, saveBoardsNow, loadPrefs, savePrefs, type BoardsFile, type BoardRecord } from './store.js';
 import { installShortcuts, buildShortcuts } from './shortcuts.js';
-import { MODES, CATEGORIES } from './modes/index.js';
+import { MODES, CATEGORIES, type ToolMode } from './modes/index.js';
 import { icon } from './icons.js';
 import { applyTheme, currentTheme, toggleTheme, h, toast, menu, copyText } from './ui.js';
 import { Palette, type Command } from './palette.js';
@@ -189,6 +189,7 @@ function pickTool(id: string): void {
   const pane = board.active;
   if (!pane) return;
   pane.setMode(id);
+  noteRecent(id);
   paintStatus();
   pane.focus();
   highlightActiveTool();
@@ -206,25 +207,87 @@ function pickTool(id: string): void {
   if (matchMedia('(max-width: 900px)').matches) setSidebar(false);
 }
 
-const navButtons = new Map<string, HTMLButtonElement>();
-for (const cat of CATEGORIES) {
-  const tools = MODES.filter((m) => m.category === cat);
-  if (!tools.length) continue;
-  const section = h('section.nav-section', {}, h('h4', {}, cat));
-  for (const m of tools) {
-    const b = h<HTMLButtonElement>('button.nav-item', { type: 'button', 'data-mode': m.id, title: m.description }, icon(m.icon, 16), h('span', {}, m.label));
-    b.addEventListener('click', () => pickTool(m.id));
-    navButtons.set(m.id, b);
-    section.append(b);
+/* Favourites (starred) and recently used tools float to the top of the sidebar
+   and the palette. Both lists live in localStorage only. */
+const FAVS_KEY = 'c64.favourites';
+const RECENT_KEY = 'c64.recent-tools';
+const readList = (key: string): string[] => {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) ?? '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && MODES.some((m) => m.id === x)) : [];
+  } catch {
+    return [];
   }
-  nav.append(section);
+};
+const writeList = (key: string, list: string[]) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(list));
+  } catch {
+    /* ignore */
+  }
+};
+let favourites = readList(FAVS_KEY);
+let recentTools = readList(RECENT_KEY);
+
+function toggleFavourite(id: string): void {
+  favourites = favourites.includes(id) ? favourites.filter((x) => x !== id) : [...favourites, id];
+  writeList(FAVS_KEY, favourites);
+  buildNav();
+  toast(favourites.includes(id) ? 'Added to favourites' : 'Removed from favourites');
 }
+
+function noteRecent(id: string): void {
+  recentTools = [id, ...recentTools.filter((x) => x !== id)].slice(0, 6);
+  writeList(RECENT_KEY, recentTools);
+  buildNav();
+}
+
+const navButtons = new Map<string, HTMLButtonElement[]>();
+
+function navItem(m: ToolMode): HTMLButtonElement {
+  const star = h('span.nav-star', { title: favourites.includes(m.id) ? 'Remove from favourites' : 'Add to favourites', role: 'button', tabindex: '-1' }, icon('star', 13));
+  star.classList.toggle('is-on', favourites.includes(m.id));
+  star.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleFavourite(m.id);
+  });
+  const b = h<HTMLButtonElement>('button.nav-item', { type: 'button', 'data-mode': m.id, title: m.description }, icon(m.icon, 16), h('span.nav-label', {}, m.label), star);
+  b.addEventListener('click', () => pickTool(m.id));
+  const list = navButtons.get(m.id) ?? [];
+  list.push(b);
+  navButtons.set(m.id, list);
+  return b;
+}
+
+function buildNav(): void {
+  nav.replaceChildren();
+  navButtons.clear();
+  const special: [string, string[]][] = [
+    ['Favourites', favourites],
+    ['Recent', recentTools.filter((id) => !favourites.includes(id))],
+  ];
+  for (const [title, ids] of special) {
+    if (!ids.length) continue;
+    const section = h('section.nav-section.nav-special', {}, h('h4', {}, title));
+    for (const id of ids) section.append(navItem(MODES.find((m) => m.id === id)!));
+    nav.append(section);
+  }
+  for (const cat of CATEGORIES) {
+    const tools = MODES.filter((m) => m.category === cat);
+    if (!tools.length) continue;
+    const section = h('section.nav-section', {}, h('h4', {}, cat));
+    for (const m of tools) section.append(navItem(m));
+    nav.append(section);
+  }
+  highlightActiveTool();
+  filterTools();
+}
+buildNav();
 
 function highlightActiveTool(): void {
   const current = board.active?.node.state.mode;
-  for (const [id, b] of navButtons) b.classList.toggle('is-active', id === current);
+  for (const [id, list] of navButtons) for (const b of list) b.classList.toggle('is-active', id === current);
 }
-highlightActiveTool();
 host.addEventListener('change', highlightActiveTool);
 host.addEventListener('click', () => queueMicrotask(highlightActiveTool));
 
@@ -376,9 +439,12 @@ help.append(
 const palette = new Palette((): Command[] => {
   const active = board.active;
   const cmds: Command[] = [];
-  for (const m of MODES) {
-    cmds.push({ id: `mode:${m.id}`, group: 'Switch tool', label: m.label, hint: m.category, icon: m.icon, keywords: `${m.description} ${(m.keywords ?? []).join(' ')}`, run: () => pickTool(m.id) });
+  const ordered = [...MODES].sort((a, b) => Number(favourites.includes(b.id)) - Number(favourites.includes(a.id)));
+  for (const m of ordered) {
+    const fav = favourites.includes(m.id);
+    cmds.push({ id: `mode:${m.id}`, group: fav ? 'Favourite tools' : 'Switch tool', label: m.label, hint: m.category, icon: fav ? 'star' : m.icon, keywords: `${m.description} ${(m.keywords ?? []).join(' ')}`, run: () => pickTool(m.id) });
   }
+  if (active) cmds.push({ id: 'fav:toggle', group: 'Pane', label: favourites.includes(active.node.state.mode) ? `Unfavourite ${active.mode.label}` : `Favourite ${active.mode.label}`, icon: 'star', run: () => toggleFavourite(active.node.state.mode) });
   for (const s of shortcuts) {
     if (s.keys.includes('K') && s.group === 'Workspace') continue;
     cmds.push({ id: `key:${s.keys}`, group: s.group === 'Workspace' ? 'Workspace' : 'Pane', label: s.label, keys: s.keys, icon: s.group === 'Panes' ? 'splitRight' : s.group === 'Editing' ? 'edit' : 'settings', run: () => s.run(board, new KeyboardEvent('keydown')) });

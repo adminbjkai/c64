@@ -41,6 +41,7 @@ export const htmlMode: ToolMode = {
   emptyHint: 'Paste HTML to indent it. Raw minifies; toggle Strict to fail on mismatched nesting.',
   sample:
     '<!DOCTYPE html>\n<html lang="en"><head><meta charset="utf-8"><title>Hello</title>\n<style>\n  body { margin: 0 }\n</style></head>\n<body><!-- main --><div class=card id="c1"><h1>Hello, <em>world</em>!</h1><p>Some <a href="/x">link</a> text.<br>Next line</p>\n<ul><li>One<li>Two</ul><pre>\n  keep   this\n</pre><script>if (a < b) { go() }</script></div></body></html>',
+  outputLanguage: 'html',
   supportsPretty: true,
   controls: [
     {

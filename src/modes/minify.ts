@@ -60,6 +60,7 @@ export const minifyMode: ToolMode = {
   icon: 'minify',
   emptyHint: 'Paste JSON, XML or CSS. Pretty expands it, Raw squeezes it — nothing else changes.',
   sample: '{"a":[1,2,3],"b":{"c":"d"}}',
+  outputLanguage: (ctx) => (ctx.options['kind'] === 'xml' ? 'xml' : ctx.options['kind'] === 'css' ? 'css' : ctx.options['kind'] === 'json' ? 'json' : undefined),
   supportsPretty: true,
   controls: [
     {

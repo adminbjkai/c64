@@ -41,6 +41,7 @@ export const jsonToTypesMode: ToolMode = {
   emptyHint: 'Paste JSON to generate type definitions. Pick the target language in the header.',
   sample:
     '{"id":1,"name":"Ada","score":9.5,"active":true,"nickname":null,"createdAt":"2024-01-02T03:04:05Z","tags":["a","b"],"address":{"city":"London","zip":"N1"},"items":[{"sku":"A","qty":1},{"sku":"B","qty":2,"note":"gift"}],"empty":[]}',
+  outputLanguage: (ctx) => ({ typescript: 'typescript', zod: 'typescript', python: 'python', go: 'go', jsonschema: 'json' } as const)[String(ctx.options['target'] ?? 'typescript')],
   supportsPretty: false,
   controls: [
     {

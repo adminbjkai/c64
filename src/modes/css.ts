@@ -27,6 +27,7 @@ export const cssMode: ToolMode = {
   icon: 'css',
   emptyHint: 'Paste CSS to beautify it. Raw minifies.',
   sample: '.card{display:flex;gap:8px}.card:hover,.card:focus-visible{outline:2px solid #3b6cff}@media (max-width:600px){.card{flex-direction:column}}',
+  outputLanguage: 'css',
   supportsPretty: true,
   controls: [
     {

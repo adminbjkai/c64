@@ -40,6 +40,7 @@ export const xmlMode: ToolMode = {
   icon: 'xml',
   emptyHint: 'Paste XML to pretty-print and check well-formedness. Raw minifies.',
   sample: '<?xml version="1.0" encoding="UTF-8"?><catalog><book id="bk101" lang="en"><author>Gambardella, Matthew</author><title>XML Developer\'s Guide</title><price>44.95</price></book><book id="bk102"><author>Ralls, Kim</author><title>Midnight Rain</title><price>5.95</price></book></catalog>',
+  outputLanguage: 'xml',
   supportsPretty: true,
   controls: [
     {
