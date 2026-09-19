@@ -45,6 +45,8 @@ export type ModeControl =
 export interface RunContext {
   pretty: boolean;
   options: Record<string, unknown>;
+  /** Second input, present only for modes that declare `inputs: 2`. */
+  inputB?: string;
 }
 
 /** Sidebar / picker sections, in display order. */
@@ -63,8 +65,17 @@ export interface ToolMode {
   keywords?: string[];
   /** One-line hint shown in an empty pane. */
   emptyHint: string;
+  /**
+   * Compare-style tools take two texts. The pane then shows two editors
+   * (A and B) and passes the second one as `ctx.inputB`.
+   */
+  inputs?: 1 | 2;
+  /** Labels for the two editors, default ["A", "B"]. */
+  inputLabels?: [string, string];
   /** Sample input the "Sample" button inserts. */
   sample: string;
+  /** Sample for the second editor of a two-input tool. */
+  sampleB?: string;
   /** Options the "Sample" button sets alongside the sample (e.g. a regex pattern). */
   sampleOptions?: Record<string, unknown>;
   controls: ModeControl[];

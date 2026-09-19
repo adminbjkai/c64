@@ -324,8 +324,14 @@ body.dragging-col, body.dragging-col * { cursor: row-resize !important; }
 .pane-body.is-side .seam-inner::after { top: 40%; bottom: 40%; left: 2px; right: 2px; }
 .seam-inner { background: var(--surface-2); }
 
-/* editor with gutter */
-.editor-wrap { flex: 1; min-height: 0; display: flex; position: relative; background: var(--surface); overflow: hidden; }
+/* editor with gutter; two-input tools show A | B side by side */
+.editors { flex: 1; min-height: 0; display: flex; }
+.editor-wrap { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; background: var(--surface); overflow: hidden; }
+.editors:not(.is-dual) .editor-b { display: none; }
+.editors.is-dual .editor-b { border-left: 1px solid var(--border); }
+.editor-label { position: absolute; top: 6px; right: 10px; z-index: 1; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; pointer-events: none; }
+.editor-label[hidden] { display: none; }
+@container (max-width: 700px) { .editors.is-dual { flex-direction: column; } .editors.is-dual .editor-b { border-left: 0; border-top: 1px solid var(--border); } }
 .gutter {
   flex: none; width: 44px; padding: 10px 8px 10px 0; text-align: right; user-select: none; overflow: hidden;
   font: var(--content-size)/1.55 var(--font-mono); color: var(--text-muted); opacity: 0.55;

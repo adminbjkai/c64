@@ -35,7 +35,9 @@ export function runDiff(input: string, ctx: RunContext): ModeResult {
   if (input.trim() === '') return { output: '', status: '' };
   const sepOpt = ctx.options['separator'];
   const separator = typeof sepOpt === 'string' && sepOpt.trim() !== '' ? sepOpt.trim() : DEFAULT_SEPARATOR;
-  const sides = splitSides(input, separator);
+  // Two editors when the pane offers them; the separator line still works for
+  // pasted-in-one-box comparisons and old share links.
+  const sides = ctx.inputB !== undefined && (ctx.inputB !== '' || !splitSides(input, separator)) ? ([input, ctx.inputB] as [string, string]) : splitSides(input, separator);
   if (!sides) {
     return {
       output: '',
@@ -68,8 +70,11 @@ export const diffMode: ToolMode = {
   category: 'Developer',
   icon: 'diff',
   keywords: ['compare', 'patch', 'myers', 'changes', 'unified'],
-  emptyHint: 'Paste the first text, a line containing only =====, then the second text.',
-  sample: 'The quick brown fox\njumps over the lazy dog.\nLine three stays.\nThis line is removed.\n=====\nThe quick red fox\njumps over the lazy dog.\nLine three stays.\nThis line is new.\n',
+  emptyHint: 'Paste the original text in Before and the changed text in After.',
+  inputs: 2,
+  inputLabels: ['Before', 'After'],
+  sample: 'The quick brown fox\njumps over the lazy dog.\nLine three stays.\nThis line is removed.\n',
+  sampleB: 'The quick red fox\njumps over the lazy dog.\nLine three stays.\nThis line is new.\n',
   supportsPretty: false,
   controls: [
     {
@@ -85,7 +90,6 @@ export const diffMode: ToolMode = {
     },
     { kind: 'toggle', key: 'ignoreWhitespace', label: 'Ignore whitespace', default: false },
     { kind: 'toggle', key: 'ignoreCase', label: 'Ignore case', default: false },
-    { kind: 'text', key: 'separator', label: 'Separator', placeholder: '=====', default: '=====' },
   ],
   run: runDiff,
 };

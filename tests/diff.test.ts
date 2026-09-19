@@ -74,7 +74,7 @@ test('splitSides: five-or-more equals, custom separator', () => {
 });
 
 test('runDiff: sample runs, status and view', () => {
-  const r = runDiff(diffMode.sample, ctx());
+  const r = runDiff(diffMode.sample, { ...ctx(), inputB: diffMode.sampleB });
   assert.equal(r.error, undefined);
   assert.equal(r.view?.kind, 'diff');
   assert.match(r.status ?? '', /^\+2 −2 · 2 lines equal$/);

@@ -70,7 +70,7 @@ def main():
             src_out = page.locator(".pane.is-active .output").inner_text()
             page.keyboard.press("Alt+Shift+N")
             page.wait_for_timeout(300)
-            linked = page.locator(".pane.is-active textarea").input_value()
+            linked = page.locator(".pane.is-active textarea").first.input_value()
             assert linked == src_out and linked, "piped pane received the source output"
             assert page.locator(".pane.is-active .link-chip:not([hidden])").count() == 1, "link chip shown"
 

@@ -21,6 +21,8 @@ export interface PaneState {
   /** Tool mode id, e.g. "json". Modes are registered in src/modes. */
   mode: string;
   input: string;
+  /** Second text for two-input (compare) tools. */
+  inputB?: string;
   /** Fraction of the pane's height given to the input editor (0–1). */
   seam: number;
   /** Raw (literal/minified) vs Pretty (formatted/structured) output. */

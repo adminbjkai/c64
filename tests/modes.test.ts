@@ -20,7 +20,7 @@ test('every registered mode has a sample that runs without error', async () => {
   for (const m of MODES) {
     assert.ok(!ids.has(m.id), `duplicate mode id ${m.id}`);
     ids.add(m.id);
-    const r = await m.run(m.sample, ctx(m.sampleOptions ?? {}));
+    const r = await m.run(m.sample, { ...ctx(m.sampleOptions ?? {}), ...(m.inputs === 2 ? { inputB: m.sampleB ?? '' } : {}) });
     assert.equal(r.error, undefined, `${m.id} sample failed: ${r.error?.message}`);
     assert.ok(r.output.length > 0 || r.view, `${m.id} produced nothing`);
     if (m.id !== 'uuid') assert.equal((await m.run('', ctx())).output, '', `${m.id} empty input`); // uuid generates ids for empty input by design

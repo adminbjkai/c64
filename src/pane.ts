@@ -83,7 +83,14 @@ function ibtn(iconName: string, title: string, onClick: (e: MouseEvent) => void,
 export class PaneView {
   readonly el: HTMLElement;
   private readonly textarea: HTMLTextAreaElement;
+  private readonly textareaB: HTMLTextAreaElement;
   private readonly gutter: HTMLElement;
+  private readonly gutterB: HTMLElement;
+  private readonly editorsEl: HTMLElement;
+  private readonly labelA: HTMLElement;
+  private readonly labelB: HTMLElement;
+  /** Which editor the Paste / Upload buttons target (the last one focused). */
+  private target: 'a' | 'b' = 'a';
   private readonly output: HTMLPreElement;
   private readonly viewHost: HTMLElement;
   private readonly errorBox: HTMLElement;
@@ -180,25 +187,35 @@ export class PaneView {
     this.optionsBar = h('div.pane-options', {}, this.prettySeg, this.controlsEl);
 
     // ---- input panel --------------------------------------------------------
-    this.textarea = h<HTMLTextAreaElement>('textarea.editor', {
-      spellcheck: 'false',
-      autocapitalize: 'off',
-      autocomplete: 'off',
-      wrap: 'off',
-      'aria-label': 'Input',
-      placeholder: 'Paste here, drop a file, or type…',
-    });
-    this.textarea.value = s.input;
-    this.textarea.addEventListener('input', () => this.onInput());
-    this.textarea.addEventListener('scroll', () => this.syncGutter());
-    this.textarea.addEventListener('keydown', (e) => {
-      // Tab inserts a literal tab instead of moving focus — it's an editor.
-      if (e.key === 'Tab' && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-        e.preventDefault();
-        this.insertAtCursor('\t');
-      }
-    });
-    this.gutter = h('div.gutter', { 'aria-hidden': 'true' });
+    const makeEditor = (which: 'a' | 'b'): [HTMLTextAreaElement, HTMLElement] => {
+      const ta = h<HTMLTextAreaElement>('textarea.editor', {
+        spellcheck: 'false',
+        autocapitalize: 'off',
+        autocomplete: 'off',
+        wrap: 'off',
+        'aria-label': which === 'a' ? 'Input' : 'Second input',
+        placeholder: 'Paste here, drop a file, or type…',
+      });
+      const gutter = h('div.gutter', { 'aria-hidden': 'true' });
+      ta.value = which === 'a' ? s.input : (s.inputB ?? '');
+      ta.addEventListener('input', () => this.onInput());
+      ta.addEventListener('focus', () => (this.target = which));
+      ta.addEventListener('scroll', () => (gutter.style.transform = `translateY(${-ta.scrollTop}px)`));
+      ta.addEventListener('keydown', (e) => {
+        // Tab inserts a literal tab instead of moving focus — it's an editor.
+        if (e.key === 'Tab' && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+          e.preventDefault();
+          const { selectionStart: a, selectionEnd: b } = ta;
+          ta.setRangeText('\t', a, b, 'end');
+          this.onInput();
+        }
+      });
+      return [ta, gutter];
+    };
+    [this.textarea, this.gutter] = makeEditor('a');
+    [this.textareaB, this.gutterB] = makeEditor('b');
+    this.labelA = h('span.editor-label', {}, 'A');
+    this.labelB = h('span.editor-label', {}, 'B');
 
     const fileInput = h<HTMLInputElement>('input', { type: 'file', hidden: true, accept: '.txt,.json,.xml,.yaml,.yml,.csv,.tsv,.css,.html,.htm,.md,.sql,.b64,.jwt,.log,text/*,application/json' });
     fileInput.addEventListener('change', () => {
@@ -223,7 +240,13 @@ export class PaneView {
       tbtn('clear', 'Clear', 'Clear the input', () => this.clearInput()),
       fileInput,
     );
-    this.inputWrap = h('div.panel.pane-input', {}, inputHead, h('div.editor-wrap', {}, this.gutter, this.textarea));
+    this.editorsEl = h(
+      'div.editors',
+      {},
+      h('div.editor-wrap', {}, this.labelA, this.gutter, this.textarea),
+      h('div.editor-wrap.editor-b', {}, this.labelB, this.gutterB, this.textareaB),
+    );
+    this.inputWrap = h('div.panel.pane-input', {}, inputHead, this.editorsEl);
 
     // ---- seam --------------------------------------------------------------
     this.seam = h('div.seam.seam-inner', {
@@ -286,6 +309,7 @@ export class PaneView {
     this.bindDrop();
 
     this.renderControls();
+    this.applyDual();
     this.applyLayout();
     this.applySeam();
     this.applyWrap();
@@ -300,6 +324,27 @@ export class PaneView {
 
   get mode(): ToolMode {
     return getMode(this.node.state.mode);
+  }
+
+  /** True when the current tool takes two inputs (A / B editors). */
+  get dual(): boolean {
+    return this.mode.inputs === 2;
+  }
+
+  /** Show or hide the second editor to match the current tool. */
+  private applyDual(): void {
+    const dual = this.dual;
+    this.editorsEl.classList.toggle('is-dual', dual);
+    const [a, b] = this.mode.inputLabels ?? ['A', 'B'];
+    this.labelA.textContent = a;
+    this.labelB.textContent = b;
+    this.labelA.hidden = !dual;
+    this.labelB.hidden = !dual;
+    this.textareaB.value = dual ? (this.node.state.inputB ?? '') : this.textareaB.value;
+    this.textareaB.setAttribute('aria-label', dual ? `Input ${b}` : 'Second input');
+    this.textarea.setAttribute('aria-label', dual ? `Input ${a}` : 'Input');
+    if (!dual) this.target = 'a';
+    this.renderGutter();
   }
 
   get outputText(): string {
@@ -364,15 +409,18 @@ export class PaneView {
     this.node.state.fresh = false;
     this.modeSelect.value = id;
     this.renderControls();
+    this.applyDual();
+    this.updateInputMeta();
     this.updateEmptyState();
     this.board.changed();
     this.runNow();
   }
 
-  setInput(text: string): void {
+  setInput(text: string, which: 'a' | 'b' = 'a'): void {
     this.markUsed();
-    if (this.textarea.value === text) return;
-    this.textarea.value = text;
+    const ta = which === 'b' ? this.textareaB : this.textarea;
+    if (ta.value === text) return;
+    ta.value = text;
     this.onInput();
   }
 
@@ -383,6 +431,7 @@ export class PaneView {
       this.renderControls();
     }
     this.setInput(this.mode.sample);
+    if (this.dual) this.setInput(this.mode.sampleB ?? '', 'b');
     this.textarea.focus();
     toast(`Sample ${this.mode.label} inserted`);
   }
@@ -390,6 +439,7 @@ export class PaneView {
   clearInput(): void {
     if (this.node.state.sourceId) this.board.link(this.node.id, null);
     this.setInput('');
+    if (this.dual) this.setInput('', 'b');
     this.textarea.focus();
   }
 
@@ -463,9 +513,9 @@ export class PaneView {
     try {
       const text = await navigator.clipboard.readText();
       if (!text) return toast('Clipboard is empty');
-      if (this.node.state.sourceId) this.board.link(this.node.id, null);
-      this.setInput(text);
-      this.textarea.focus();
+      if (this.node.state.sourceId && this.target === 'a') this.board.link(this.node.id, null);
+      this.setInput(text, this.dual ? this.target : 'a');
+      (this.dual && this.target === 'b' ? this.textareaB : this.textarea).focus();
     } catch {
       toast('Clipboard access was blocked — press ⌘/Ctrl+V in the editor instead');
       this.textarea.focus();
@@ -478,7 +528,7 @@ export class PaneView {
     this.runTimer = undefined;
     const s = this.node.state;
     const seq = ++this.runSeq;
-    const promise = runMode(s.mode, s.input, { pretty: s.pretty, options: s.options });
+    const promise = runMode(s.mode, s.input, { pretty: s.pretty, options: s.options, ...(this.dual ? { inputB: s.inputB ?? '' } : {}) });
     // Large inputs go to the worker: show that something is happening only
     // if it takes noticeable time (no spinner flashes for instant runs).
     const slow = window.setTimeout(() => this.el.classList.add('is-busy'), 120);
@@ -518,7 +568,8 @@ export class PaneView {
 
   private onInput(): void {
     this.node.state.input = this.textarea.value;
-    if (this.node.state.input !== '') this.node.state.fresh = false;
+    if (this.dual) this.node.state.inputB = this.textareaB.value || undefined;
+    if (this.node.state.input !== '' || this.node.state.inputB) this.node.state.fresh = false;
     this.updateEmptyState();
     this.updateInputMeta();
     this.renderGutter();
@@ -536,8 +587,8 @@ export class PaneView {
 
   private async loadFile(f: File): Promise<void> {
     const text = await f.text();
-    if (this.node.state.sourceId) this.board.link(this.node.id, null);
-    this.setInput(text);
+    if (this.node.state.sourceId && this.target === 'a') this.board.link(this.node.id, null);
+    this.setInput(text, this.dual ? this.target : 'a');
     toast(`Loaded ${f.name} (${f.size.toLocaleString()} bytes) — stays in your browser`);
   }
 
@@ -548,48 +599,54 @@ export class PaneView {
   }
 
   private updateInputMeta(): void {
-    const t = this.node.state.input;
-    if (!t) {
+    const describe = (t: string) => {
+      const lines = t.split('\n').length;
+      return `${t.length.toLocaleString()} chars · ${lines.toLocaleString()} line${lines === 1 ? '' : 's'}`;
+    };
+    const a = this.node.state.input;
+    const b = this.dual ? (this.node.state.inputB ?? '') : '';
+    if (!a && !b) {
       this.inputMeta.textContent = '';
       return;
     }
-    const lines = t.split('\n').length;
-    this.inputMeta.textContent = `${t.length.toLocaleString()} chars · ${lines.toLocaleString()} line${lines === 1 ? '' : 's'}`;
+    this.inputMeta.textContent = this.dual ? `A ${describe(a)} · B ${describe(b)}` : describe(a);
   }
 
   /* ---------------------------------------------------------------- gutter */
 
   private renderGutter(): void {
+    this.renderOneGutter(this.gutter, this.textarea);
+    if (this.dual) this.renderOneGutter(this.gutterB, this.textareaB);
+  }
+
+  private renderOneGutter(gutter: HTMLElement, ta: HTMLTextAreaElement): void {
     if (this.node.state.wrap) {
-      this.gutter.hidden = true;
+      gutter.hidden = true;
       return;
     }
-    const text = this.node.state.input;
+    const text = ta.value;
     let n = 1;
     for (let i = 0; i < text.length && n <= GUTTER_MAX_LINES; i++) if (text.charCodeAt(i) === 10) n++;
     if (n > GUTTER_MAX_LINES) {
-      this.gutter.hidden = true;
+      gutter.hidden = true;
       return;
     }
-    this.gutter.hidden = false;
-    const current = this.gutter.childElementCount;
+    gutter.hidden = false;
+    const current = gutter.childElementCount;
     if (current < n) {
       const frag = document.createDocumentFragment();
       for (let i = current + 1; i <= n; i++) frag.append(h('span', {}, String(i)));
-      this.gutter.append(frag);
+      gutter.append(frag);
     } else {
-      while (this.gutter.childElementCount > n) this.gutter.lastElementChild!.remove();
+      while (gutter.childElementCount > n) gutter.lastElementChild!.remove();
     }
-    this.syncGutter();
-  }
-
-  private syncGutter(): void {
-    this.gutter.style.transform = `translateY(${-this.textarea.scrollTop}px)`;
+    gutter.style.transform = `translateY(${-ta.scrollTop}px)`;
   }
 
   private applyWrap(): void {
     const wrap = this.node.state.wrap === true;
     this.textarea.wrap = wrap ? 'soft' : 'off';
+    this.textareaB.wrap = wrap ? 'soft' : 'off';
     this.el.classList.toggle('is-wrap', wrap);
     this.renderGutter();
   }
@@ -710,7 +767,7 @@ export class PaneView {
   }
 
   private updateEmptyState(): void {
-    const empty = this.node.state.input === '';
+    const empty = this.node.state.input === '' && !(this.dual && this.node.state.inputB);
     const fresh = this.node.state.fresh !== false;
     this.body.classList.toggle('is-empty', empty);
     this.body.classList.toggle('is-ready', empty && !fresh);
