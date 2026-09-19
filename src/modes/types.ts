@@ -50,7 +50,7 @@ export interface RunContext {
 }
 
 /** Sidebar / picker sections, in display order. */
-export const CATEGORIES = ['JSON', 'Formats', 'Encoding', 'Text', 'Web', 'Crypto & IDs', 'Developer'] as const;
+export const CATEGORIES = ['JSON', 'Formats', 'Compare', 'Encoding', 'Text', 'Web', 'Crypto & IDs', 'Generators', 'Developer'] as const;
 export type ToolCategory = (typeof CATEGORIES)[number];
 
 export interface ToolMode {
