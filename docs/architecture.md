@@ -38,9 +38,18 @@ docs/                    this folder
 1. The **board** is a tree of `SplitNode`s (row / column, sizes summing to 1)
    and `PaneNode`s. Every pane holds its own `PaneState`: mode id, input text,
    options, Pretty/Raw, layout, seam position, optional title, optional
-   `sourceId` (pipe), wrap flag and a `fresh` flag (true until a tool is
-   picked, input arrives or a pipe is linked — it decides which empty state
-   the pane shows: the tool grid, or the mode's hint with Sample/Paste/Upload).
+   `sourceId` (pipe), wrap flag and a `detected` flag (true while the tool was
+   chosen by Auto detect rather than by the user — the pane then shows a
+   "Detected JSON · change" chip; any manual choice clears it).
+   New panes start in the **Auto detect** pseudo-tool (`src/modes/auto.ts`,
+   category *Start*): the editor fills the pane with a row of start chips
+   under it. On every input the pane runs the Explain heuristics
+   (`explain()` → `detectMode()` in `src/explain.ts`) and switches to the
+   matching tool — JSON, JWT, Base64, XML, CSS, CSV, YAML, hex, URL,
+   URL-encoded text, query string or cron — on high confidence, or medium
+   when a dedicated tool exists. Plain text stays in Auto (which formats
+   JSON and otherwise reports "Not recognised yet", never an error).
+   Detection runs only while the pane is in Auto; *Clear* returns it there.
 2. Typing in a pane debounces (180 ms) then calls `runMode(modeId, input, ctx)`.
    Inputs under 150 000 characters run on the main thread; larger ones are
    posted to the Web Worker so the UI never freezes. A "working" bar appears

@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>A local-first workspace for decoding, formatting, converting and inspecting structured text — in tileable panes you can chain together.</strong><br>
-  53 tools · zero dependencies · nothing ever leaves your browser.
+  54 tools · zero dependencies · nothing ever leaves your browser.
 </p>
 
 <p align="center">
@@ -29,6 +29,10 @@ server. c64 is the opposite: **one page, every tool, all local.** The page
 ships a Content-Security-Policy that only allows requests to its own origin,
 the server has no POST handler, and your boards live in `localStorage` on
 your machine. You can install it as an app and use it offline.
+
+It is as immediate as the single-purpose sites: **paste anything and it
+detects the format** — JSON, JWT, Base64, XML, YAML, CSV, a URL, a cron
+expression — and picks the right tool, with one obvious action button.
 
 It is also built for real work rather than one-off pastes: tile as many panes
 as you need, **pipe** one pane's output into the next (decode → format →
@@ -61,6 +65,9 @@ offer one-click next steps.
   <img src="docs/screenshots/pipes.png" width="900" alt="Three panes chained with pipes: YAML → JSON → TypeScript types" />
 </p>
 
+* **Auto detect** — every new pane starts here: paste anything, it detects the
+  format and switches to the right tool (a "Detected JSON · change" chip lets
+  you override; *Clear* takes the pane back to Auto).
 * **Panes** — split right / below, drag seams, maximise one, duplicate, swap,
   rename, close with undo. Each pane remembers its tool, options, Pretty/Raw,
   stacked / side-by-side layout and word wrap.
@@ -73,7 +80,7 @@ offer one-click next steps.
 * **Command palette** (`⌘/Ctrl+K`) — switch tools, run pane actions, jump to
   panes, change boards.
 * **Editor** — line-number gutter, tab inserts a tab, drop or upload a file,
-  paste from clipboard, one-click sample for every tool.
+  paste from clipboard, a "Try a sample" button for every tool.
 * **Compare tools** get two editors (A / B) with a Swap button; everything
   else has one. Every pane has a **?** panel describing the tool, its options
   and limits.

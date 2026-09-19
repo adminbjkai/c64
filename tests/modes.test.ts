@@ -27,6 +27,19 @@ test('every registered mode has a sample that runs without error', async () => {
     if (!['uuid', 'lorem'].includes(m.id)) assert.equal((await m.run('', ctx())).output, '', `${m.id} empty input`);
   }
   assert.equal(getMode('nope').id, 'json');
+  assert.equal(MODES[0]!.id, 'auto', 'Auto detect is the first registered tool');
+  assert.equal(MODES[0]!.category, 'Start');
+});
+
+test('auto mode formats JSON and never errors on other input', async () => {
+  const auto = getMode('auto');
+  const ok = await auto.run('{"a":1}', ctx());
+  assert.equal(ok.output, '{\n  "a": 1\n}');
+  const other = await auto.run('hello world, not json', ctx());
+  assert.equal(other.error, undefined);
+  assert.equal(other.output, '');
+  assert.equal(other.status, 'Not recognised yet');
+  assert.deepEqual(other.notes, ['Pick a tool from the sidebar or the chips below.']);
 });
 
 test('parseJsonWithSpans records source offsets per path', () => {

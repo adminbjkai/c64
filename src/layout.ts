@@ -38,11 +38,11 @@ export interface PaneState {
   /** Soft-wrap long lines in the editor and text output. */
   wrap?: boolean;
   /**
-   * True until the user has chosen a tool, typed/pasted/loaded input, or
-   * linked a pipe. A fresh empty pane shows the tool grid; a non-fresh empty
-   * pane shows the mode's hint with Sample / Paste / Upload actions.
+   * True when the current tool was chosen by Auto detect rather than by the
+   * user. The pane then shows a "Detected … · change" chip. Any manual tool
+   * choice clears it; Clear returns the pane to `auto`.
    */
-  fresh?: boolean;
+  detected?: boolean;
 }
 
 export interface PaneNode {
@@ -72,7 +72,7 @@ export function newId(prefix: string): string {
 }
 
 export function defaultPaneState(overrides: Partial<PaneState> = {}): PaneState {
-  return { mode: 'json', input: '', seam: 0.5, pretty: true, layout: 'stacked', options: {}, fresh: true, ...overrides };
+  return { mode: 'auto', input: '', seam: 0.5, pretty: true, layout: 'stacked', options: {}, ...overrides };
 }
 
 export function createPane(state: Partial<PaneState> = {}): PaneNode {
@@ -112,7 +112,7 @@ export function paneCount(root: LayoutNode): number {
 
 /** Deep copy of a subtree (states included) with fresh ids — for duplicating. */
 export function clonePane(node: PaneNode): PaneNode {
-  return createPane({ ...node.state, options: { ...node.state.options }, fresh: false });
+  return createPane({ ...node.state, options: { ...node.state.options } });
 }
 
 /* ------------------------------------------------------------ mutations */
@@ -230,12 +230,15 @@ export function resizeSeam(split: SplitNode, index: number, delta: number): void
  */
 export function sanitize(node: unknown): LayoutNode | null {
   if (!node || typeof node !== 'object') return null;
-  const n = node as Partial<LayoutNode> & { state?: Partial<PaneState> };
+  const n = node as Partial<LayoutNode> & { state?: Partial<PaneState> & { fresh?: unknown } };
   if (n.type === 'pane') {
     if (typeof n.id !== 'string') return null;
-    const s: Partial<PaneState> = n.state ?? {};
-    const mode = typeof s.mode === 'string' ? s.mode : 'json';
+    const s: Partial<PaneState> & { fresh?: unknown } = n.state ?? {};
     const input = typeof s.input === 'string' ? s.input : '';
+    let mode = typeof s.mode === 'string' ? s.mode : 'json';
+    // Pre-1.2 boards had a `fresh` flag instead of the Auto tool: an untouched
+    // empty pane starts in Auto now.
+    if (s.fresh === true && input === '') mode = 'auto';
     return {
       type: 'pane',
       id: n.id,
@@ -250,8 +253,7 @@ export function sanitize(node: unknown): LayoutNode | null {
         ...(typeof s.title === 'string' && s.title.trim() ? { title: s.title.slice(0, 80) } : {}),
         ...(typeof s.sourceId === 'string' ? { sourceId: s.sourceId } : {}),
         ...(s.wrap === true ? { wrap: true } : {}),
-        // Legacy records (no `fresh`) are fresh only if never touched at all.
-        fresh: typeof s.fresh === 'boolean' ? s.fresh : input === '' && mode === 'json',
+        ...(s.detected === true ? { detected: true } : {}),
       }),
     };
   }

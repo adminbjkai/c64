@@ -24,9 +24,23 @@ import {
   type LayoutNode,
   type SplitNode,
   type PaneNode,
+  type PaneState,
 } from './layout.js';
 import { PaneView, type BoardActions } from './pane.js';
 import { h, toast } from './ui.js';
+
+/** Board widths from this up put input and output side by side by default. */
+const SIDE_MIN_WIDTH = 900;
+
+/**
+ * A new pane sized for the board: side-by-side (seam 0.5) on wide boards,
+ * stacked with a shorter editor (seam 0.42) on narrow ones. Existing boards
+ * keep whatever layout they saved.
+ */
+export function newPaneFor(host: HTMLElement, state: Partial<PaneState> = {}): PaneNode {
+  const wide = (host.clientWidth || innerWidth) >= SIDE_MIN_WIDTH;
+  return createPane({ layout: wide ? 'side' : 'stacked', seam: wide ? 0.5 : 0.42, ...state });
+}
 
 interface ClosedEntry {
   node: PaneNode;
@@ -54,7 +68,7 @@ export class Board {
     initial: LayoutNode | null,
     private readonly events: BoardEvents,
   ) {
-    this.root = initial ?? createPane();
+    this.root = initial ?? newPaneFor(host);
     // Any focus inside a pane makes it the active one (target of shortcuts).
     host.addEventListener('focusin', (e) => {
       const pane = (e.target as HTMLElement).closest<HTMLElement>('.pane');
@@ -125,9 +139,8 @@ export class Board {
   add(targetId: string, dir: 'row' | 'col', fresh?: PaneNode): PaneNode | null {
     const target = findPane(this.root, targetId);
     if (!target) return null;
-    // A new pane inherits the neighbour's mode/options — usually what you
-    // want when comparing two payloads side by side. Input starts empty.
-    const node = fresh ?? createPane({ mode: target.state.mode, options: { ...target.state.options }, pretty: target.state.pretty, layout: target.state.layout });
+    // A new pane starts in Auto detect: paste and it picks the tool itself.
+    const node = fresh ?? newPaneFor(this.host);
     this.root = addSibling(this.root, targetId, dir, node);
     this.zoomedId = null;
     this.render();
@@ -141,7 +154,7 @@ export class Board {
   addPiped(sourceId: string): void {
     const src = findPane(this.root, sourceId);
     if (!src) return;
-    const node = createPane({ mode: 'json', layout: src.state.layout, sourceId, fresh: false });
+    const node = newPaneFor(this.host, { mode: 'json', sourceId });
     this.add(sourceId, 'row', node);
     const v = this.views.get(sourceId);
     if (v) this.views.get(node.id)?.setInput(v.outputText);
@@ -294,7 +307,7 @@ export class Board {
 
   /** Replace the whole tree (board switch / import). */
   load(root: LayoutNode): void {
-    const clean = sanitize(root) ?? createPane();
+    const clean = sanitize(root) ?? newPaneFor(this.host);
     for (const v of this.views.values()) v.destroy();
     this.views.clear();
     this.closed.length = 0;
@@ -324,6 +337,9 @@ export class Board {
       this.host.replaceChildren(this.build(this.root));
     }
     this.host.classList.toggle('is-zoomed', this.zoomedId !== null);
+    // Single-pane boards hide the split/close icons (they live in the ⋯ menu);
+    // multi-pane boards keep them in every title bar.
+    this.host.dataset['panes'] = paneCount(this.root) > 1 ? 'many' : '1';
     for (const v of this.views.values()) v.refreshChrome();
     this.refreshTitles();
   }

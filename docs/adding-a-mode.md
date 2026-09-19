@@ -2,7 +2,9 @@
 
 Every tool in c64 is a **mode**: a pure function from `(input, ctx)` to a
 `ModeResult`, plus a small descriptor the shell uses to build the sidebar
-entry, the pane header dropdown, the option controls and the empty-pane hint.
+entry, the pane header dropdown, the option controls, the primary action
+button (`primaryLabel()` in `src/pane.ts` — add a case if "Run" is not the
+right verb) and the empty-pane hint.
 Modes never touch the DOM, so they run unchanged inside the Web Worker and are
 unit-tested with `node --test`.
 
@@ -13,12 +15,12 @@ export interface ToolMode {
   id: string;             // stable, kebab-case, used in saved boards
   label: string;          // "URL Encode / Decode"
   description: string;    // one sentence, ends with a period
-  category: ToolCategory; // one of CATEGORIES
+  category: ToolCategory; // one of CATEGORIES ('Start' is reserved for Auto detect)
   icon: string;           // key in src/icons.ts
   keywords?: string[];    // extra search terms for the sidebar / palette
   emptyHint: string;      // one line shown in an empty pane
-  sample: string;         // the "Sample" button inserts this — must run without error
-  sampleOptions?: {…};    // options the Sample button sets too (e.g. a regex pattern)
+  sample: string;         // "Try a sample" (empty pane, ⋯ menu, ? panel) inserts this — must run without error
+  sampleOptions?: {…};    // options the sample sets too (e.g. a regex pattern)
   inputs?: 1 | 2;         // 2 = compare-style tool: the pane shows A/B editors, B arrives as ctx.inputB
   inputLabels?: [a, b];   // editor labels for two-input tools, e.g. ['Original', 'Changed']
   sampleB?: string;       // sample for the second editor

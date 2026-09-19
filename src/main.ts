@@ -1,17 +1,17 @@
 /**
  * Entry point: apply theme and prefs, restore the current board (or start
- * with one empty JSON pane), build the sidebar, top bar, status bar, command
- * palette and keyboard shortcuts, and register the offline service worker.
+ * with one empty Auto-detect pane), build the sidebar, top bar, status bar,
+ * command palette and keyboard shortcuts, and register the offline service worker.
  */
 
-import { Board } from './board.js';
+import { Board, newPaneFor } from './board.js';
 import { loadBoards, saveBoards, saveBoardsNow, loadPrefs, savePrefs, type BoardsFile, type BoardRecord } from './store.js';
 import { installShortcuts, buildShortcuts } from './shortcuts.js';
 import { MODES, CATEGORIES, type ToolMode } from './modes/index.js';
 import { icon } from './icons.js';
 import { applyTheme, currentTheme, toggleTheme, h, toast, menu, copyText } from './ui.js';
 import { Palette, type Command } from './palette.js';
-import { createPane, newId, sanitize, type LayoutNode } from './layout.js';
+import { newId, sanitize, type LayoutNode } from './layout.js';
 import { VERSION } from './version.js';
 
 applyTheme(currentTheme());
@@ -20,14 +20,17 @@ document.documentElement.style.setProperty('--content-size', `${prefs.fontSize}p
 
 /* ------------------------------------------------------------------ boards */
 
-let file: BoardsFile = loadBoards() ?? { current: '', boards: [] };
+const host = document.getElementById('board')!;
+const stored = loadBoards();
+/** No boards in storage at all: the very first visit (sidebar starts collapsed). */
+const firstVisit = stored === null;
+let file: BoardsFile = stored ?? { current: '', boards: [] };
 if (!file.boards.length) {
-  const rec: BoardRecord = { id: newId('b'), name: 'My board', root: createPane(), updated: Date.now() };
+  const rec: BoardRecord = { id: newId('b'), name: 'My board', root: newPaneFor(host), updated: Date.now() };
   file = { current: rec.id, boards: [rec] };
 }
 const currentRecord = (): BoardRecord => file.boards.find((b) => b.id === file.current) ?? file.boards[0]!;
 
-const host = document.getElementById('board')!;
 // The Board constructor fires events before `board` is assigned; ignore those.
 let ready = false;
 const board = new Board(host, currentRecord().root, {
@@ -67,7 +70,7 @@ function switchBoard(id: string): void {
 }
 
 function newBoard(name?: string, root?: LayoutNode): void {
-  const rec: BoardRecord = { id: newId('b'), name: (name ?? `Board ${file.boards.length + 1}`).slice(0, 80), root: root ?? createPane(), updated: Date.now() };
+  const rec: BoardRecord = { id: newId('b'), name: (name ?? `Board ${file.boards.length + 1}`).slice(0, 80), root: root ?? newPaneFor(host), updated: Date.now() };
   file.boards.push(rec);
   switchBoard(rec.id);
 }
@@ -84,14 +87,14 @@ function renameBoard(): void {
 function duplicateBoard(): void {
   const rec = currentRecord();
   const copy = sanitize(JSON.parse(JSON.stringify(rec.root)));
-  newBoard(`${rec.name} (copy)`, copy ?? createPane());
+  newBoard(`${rec.name} (copy)`, copy ?? newPaneFor(host));
 }
 
 function deleteBoard(): void {
   const rec = currentRecord();
   if (file.boards.length === 1) {
     if (!confirm(`Clear “${rec.name}”? This removes every pane and its input.`)) return;
-    rec.root = createPane();
+    rec.root = newPaneFor(host);
     board.load(rec.root);
     rec.root = board.root;
     saveBoardsNow(file);
@@ -290,6 +293,7 @@ function highlightActiveTool(): void {
 }
 host.addEventListener('change', highlightActiveTool);
 host.addEventListener('click', () => queueMicrotask(highlightActiveTool));
+host.addEventListener('input', () => queueMicrotask(highlightActiveTool));
 
 function filterTools(): void {
   const q = search.value.trim().toLowerCase();
@@ -329,6 +333,7 @@ function setSidebar(open: boolean): void {
   prefs.sidebar = open ? 'open' : 'closed';
   savePrefs(prefs);
 }
+if (firstVisit) prefs.sidebar = 'closed';
 setSidebar(prefs.sidebar !== 'closed' && !matchMedia('(max-width: 900px)').matches);
 sidebarToggle.addEventListener('click', () => setSidebar(document.body.classList.contains('sidebar-collapsed')));
 scrim.addEventListener('click', () => setSidebar(false));
@@ -357,16 +362,20 @@ boardBtn.addEventListener('click', () => {
   ]);
 });
 
-const addRight = document.getElementById('add-right')!;
-addRight.append(icon('splitRight', 14), h('span', {}, 'Pane right'));
-addRight.addEventListener('click', () => board.active && board.add(board.active.node.id, 'row'));
-const addBelow = document.getElementById('add-below')!;
-addBelow.append(icon('splitDown', 14), h('span', {}, 'Pane below'));
-addBelow.addEventListener('click', () => board.active && board.add(board.active.node.id, 'col'));
+const addPane = document.getElementById('add-pane')!;
+addPane.append(icon('plus', 14), h('span', {}, 'Pane'), icon('chevronDown', 12));
+addPane.addEventListener('click', () => {
+  menu(addPane, [
+    { icon: 'splitRight', label: 'Add right', keys: 'Alt+Shift+R', run: () => board.active && board.add(board.active.node.id, 'row') },
+    { icon: 'splitDown', label: 'Add below', keys: 'Alt+Shift+B', run: () => board.active && board.add(board.active.node.id, 'col') },
+  ]);
+});
 
 const paletteBtn = document.getElementById('palette-toggle')!;
 paletteBtn.append(icon('command', 14), h('span', {}, 'Commands'), h('kbd', {}, navigator.platform.includes('Mac') ? '⌘K' : 'Ctrl K'));
 paletteBtn.addEventListener('click', () => palette.open());
+// Panes ask for the palette (start chips, "Detected … · change") via an event.
+document.addEventListener('c64:palette', () => palette.open());
 
 const themeToggle = document.getElementById('theme-toggle')!;
 function paintThemeButton(): void {
@@ -381,17 +390,14 @@ document.addEventListener('c64:theme', paintThemeButton);
 
 /* --------------------------------------------------------------- help panel */
 
+// Reachable from the palette ("Keyboard shortcuts") and Alt+Shift+/.
 const help = document.getElementById('help')!;
-const helpToggle = document.getElementById('help-toggle')!;
-helpToggle.append(icon('keyboard', 14), h('span', {}, 'Shortcuts'));
 const helpClose = h('button.btn.icon', { type: 'button', 'aria-label': 'Close' }, icon('close'));
 helpClose.addEventListener('click', () => toggleHelp(false));
 function toggleHelp(force?: boolean): void {
   const open = force ?? help.hidden;
   help.hidden = !open;
-  helpToggle.setAttribute('aria-expanded', String(open));
 }
-helpToggle.addEventListener('click', () => toggleHelp());
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !help.hidden) toggleHelp(false);
 });
@@ -445,8 +451,10 @@ const palette = new Palette((): Command[] => {
     cmds.push({ id: `mode:${m.id}`, group: fav ? 'Favourite tools' : 'Switch tool', label: m.label, hint: m.category, icon: fav ? 'star' : m.icon, keywords: `${m.description} ${(m.keywords ?? []).join(' ')}`, run: () => pickTool(m.id) });
   }
   if (active) cmds.push({ id: 'fav:toggle', group: 'Pane', label: favourites.includes(active.node.state.mode) ? `Unfavourite ${active.mode.label}` : `Favourite ${active.mode.label}`, icon: 'star', run: () => toggleFavourite(active.node.state.mode) });
+  cmds.push({ id: 'ws:help', group: 'Workspace', label: 'Keyboard shortcuts', keys: 'Alt+Shift+/', icon: 'keyboard', run: () => toggleHelp() });
   for (const s of shortcuts) {
     if (s.keys.includes('K') && s.group === 'Workspace') continue;
+    if (s.keys === 'Alt+Shift+/') continue;
     cmds.push({ id: `key:${s.keys}`, group: s.group === 'Workspace' ? 'Workspace' : 'Pane', label: s.label, keys: s.keys, icon: s.group === 'Panes' ? 'splitRight' : s.group === 'Editing' ? 'edit' : 'settings', run: () => s.run(board, new KeyboardEvent('keydown')) });
   }
   if (active) {

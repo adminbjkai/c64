@@ -1,16 +1,18 @@
 /**
  * PaneView — one tool instance. Structure (top → bottom):
  *
- *   ┌ title bar   : pane name, tool dropdown, description, Explain, layout, ⋯ menu, split/close
- *   ├ options bar : Pretty | Raw segmented control, mode-specific options
- *   ├ INPUT panel : label, link chip, counters, Paste · Upload · Sample · Clear, gutter + editor
+ *   ┌ title bar   : pane name, tool dropdown, description, Explain, ⋯ menu
+ *   │               (+ maximise / split / close icons on multi-pane boards)
+ *   ├ options bar : Pretty | Raw, up to three options (rest behind "Options ▾"), primary action
+ *   ├ INPUT panel : label, link / detect chips, counters, Paste · Upload · Clear, gutter + editor
  *   ├ seam        : draggable (horizontal when stacked, vertical when side-by-side)
- *   └ OUTPUT panel: label, status, Find · Copy · Download · Send on, the result (text or rich view)
+ *   └ OUTPUT panel: label, status, Copy · Send on · ⋯ (Find, Download), the result (text or rich view)
  *
- * An empty pane shows a tool picker under the editor instead of the output,
- * so a fresh pane is self-explanatory. A PaneView owns its DOM for the life
- * of the pane; the board re-parents it when the layout changes, so typing,
- * scroll and focus survive structural edits.
+ * New panes start in the Auto detect pseudo-tool: the editor fills the pane
+ * with a row of start chips under it, and the first recognisable paste
+ * switches the pane to the right tool (see `detect()`). A PaneView owns its
+ * DOM for the life of the pane; the board re-parents it when the layout
+ * changes, so typing, scroll and focus survive structural edits.
  */
 
 import type { PaneNode } from './layout.js';
@@ -18,6 +20,7 @@ import { MODES, CATEGORIES, getMode, type ModeResult, type ToolMode } from './mo
 import { VIEWS, type ViewContext } from './views/index.js';
 import { runMode } from './runner.js';
 import { ExplainPanel } from './explain-ui.js';
+import { explain, detectMode, detectedName } from './explain.js';
 import { icon } from './icons.js';
 import { highlightInto } from './highlight.js';
 import { h, toast, copyText, menu, type MenuItem } from './ui.js';
@@ -45,6 +48,11 @@ export interface BoardActions {
 }
 
 const DEBOUNCE_MS = 180;
+/** Auto detect only looks at inputs this long (or shorter ones with a structural hint). */
+const DETECT_MIN_CHARS = 12;
+const DETECT_MAX_CHARS = 200_000;
+/** Start chips under the editor of an empty Auto pane. */
+const START_CHIPS: [string, string][] = [['json', 'JSON'], ['base64', 'Base64'], ['jwt', 'JWT'], ['diff', 'Diff'], ['yaml', 'YAML'], ['convert', 'Convert']];
 /** Seam can't be dragged past these so both editor and output stay usable. */
 const SEAM_MIN = 0.1;
 const SEAM_MAX = 0.9;
@@ -65,6 +73,34 @@ function outputExtension(mode: ToolMode, pretty: boolean, options: Record<string
     case 'json-to-types': return { typescript: 'ts', zod: 'ts', python: 'py', go: 'go', jsonschema: 'json' }[String(options['target'] ?? 'typescript')] ?? 'txt';
     case 'convert': return typeof options['to'] === 'string' ? (options['to'] as string) : 'txt';
     default: return 'txt';
+  }
+}
+
+/** Label of the primary action button for a tool (and its current options). */
+export function primaryLabel(mode: ToolMode, options: Record<string, unknown>): string {
+  const dir = typeof options['direction'] === 'string' ? options['direction'] : 'auto';
+  switch (mode.id) {
+    case 'json': return 'Format JSON';
+    case 'xml': return 'Format XML';
+    case 'yaml': return 'Format YAML';
+    case 'sql': return 'Format SQL';
+    case 'css': return 'Format CSS';
+    case 'html': return 'Format HTML';
+    case 'minify': return 'Format';
+    case 'base64': return dir === 'decode' ? 'Decode Base64' : dir === 'encode' ? 'Encode Base64' : 'Decode / Encode';
+    case 'jwt': return 'Decode JWT';
+    case 'url': return dir === 'encode' ? 'Encode URL' : 'Decode URL';
+    case 'hex': case 'base-n': case 'gzip': case 'data-url': case 'html-entities': case 'escape':
+    case 'convert': case 'toml': case 'query-string': case 'json-to-types': case 'html-to-markdown': case 'json-flatten': case 'json-sort': case 'case':
+      return 'Convert';
+    case 'json-patch': return 'Apply patch';
+    case 'json-schema': return 'Validate';
+    case 'json-diff': case 'xml-diff': case 'yaml-diff': case 'diff': case 'list-compare': return 'Compare';
+    case 'json-tree': case 'json-path': return 'Show tree';
+    case 'json-graph': return 'Draw graph';
+    case 'json-table': case 'csv': return 'Show table';
+    case 'auto': return 'Detect & run';
+    default: return 'Run';
   }
 }
 
@@ -106,11 +142,15 @@ export class PaneView {
   private readonly body: HTMLElement;
   private readonly seam: HTMLElement;
   private readonly controlsEl: HTMLElement;
+  private readonly controlsExtra: HTMLElement;
+  private readonly optionsMore: HTMLButtonElement;
+  private optionsOpen = false;
+  private readonly runBtn: HTMLButtonElement;
   private readonly optionsBar: HTMLElement;
   private readonly prettySeg: HTMLElement;
-  private readonly layoutBtn: HTMLButtonElement;
   private readonly zoomBtn: HTMLButtonElement;
   private readonly closeBtn: HTMLButtonElement;
+  private readonly detectChip: HTMLButtonElement;
   private readonly modeSelect: HTMLSelectElement;
   private readonly modeIcon: HTMLElement;
   private readonly titleEl: HTMLElement;
@@ -149,14 +189,14 @@ export class PaneView {
     this.modeSelect.addEventListener('change', () => this.setMode(this.modeSelect.value));
     this.descEl = h('span.mode-desc');
 
-    this.layoutBtn = ibtn('columns', '', () => this.toggleLayout());
-    this.zoomBtn = ibtn('maximize', 'Maximise this pane (Alt+Shift+Enter)', () => board.zoom(node.id), 'zoom-btn');
+    // Maximise / split / close live in the ⋯ menu; on multi-pane boards the
+    // board sets data-panes="many" and CSS shows them as icons too (.multi).
+    this.zoomBtn = ibtn('maximize', 'Maximise this pane (Alt+Shift+Enter)', () => board.zoom(node.id), 'zoom-btn.multi');
     const explainBtn = tbtn('bulb', 'Explain', 'What is this input? Local analysis, no server (Alt+Shift+E)', () => this.toggleExplain());
-    const infoBtn = ibtn('help', 'About this tool: what it does, its options and limits', () => this.toggleInfo(), 'info-btn');
-    const moreBtn = ibtn('settings', 'More pane actions', (e) => this.openMenu(e.currentTarget as HTMLElement), 'more-btn');
-    const addRightBtn = ibtn('splitRight', 'Add pane to the right (Alt+Shift+R)', () => board.addRight(node.id));
-    const addBelowBtn = ibtn('splitDown', 'Add pane below (Alt+Shift+B)', () => board.addBelow(node.id));
-    this.closeBtn = ibtn('close', 'Close pane (Alt+Shift+W)', () => board.close(node.id), 'close');
+    const moreBtn = ibtn('settings', 'Pane menu: layout, maximise, split, close…', (e) => this.openMenu(e.currentTarget as HTMLElement), 'more-btn');
+    const addRightBtn = ibtn('splitRight', 'Add pane to the right (Alt+Shift+R)', () => board.addRight(node.id), 'multi');
+    const addBelowBtn = ibtn('splitDown', 'Add pane below (Alt+Shift+B)', () => board.addBelow(node.id), 'multi');
+    this.closeBtn = ibtn('close', 'Close pane (Alt+Shift+W)', () => board.close(node.id), 'close.multi');
 
     const title = h(
       'header.pane-title',
@@ -166,11 +206,9 @@ export class PaneView {
       this.descEl,
       h('span.spacer'),
       explainBtn,
-      infoBtn,
-      this.layoutBtn,
-      this.zoomBtn,
       moreBtn,
-      h('span.divider'),
+      h('span.divider.multi'),
+      this.zoomBtn,
       addRightBtn,
       addBelowBtn,
       this.closeBtn,
@@ -189,7 +227,12 @@ export class PaneView {
       this.prettySeg.append(b);
     }
     this.controlsEl = h('div.mode-controls');
-    this.optionsBar = h('div.pane-options', {}, this.prettySeg, this.controlsEl);
+    this.controlsExtra = h('div.mode-controls.mode-controls-extra', { hidden: true });
+    this.optionsMore = h<HTMLButtonElement>('button.btn.small.options-more', { type: 'button', 'aria-expanded': 'false', title: 'More options for this tool' }, h('span', {}, 'Options'), icon('chevronDown', 12));
+    this.optionsMore.addEventListener('click', () => this.toggleOptions());
+    this.runBtn = h<HTMLButtonElement>('button.btn.primary.run-btn', { type: 'button', title: 'Run now (⌘/Ctrl+Enter) · Shift+click runs and copies the output' });
+    this.runBtn.addEventListener('click', (e) => this.runPrimary(e.shiftKey));
+    this.optionsBar = h('div.pane-options', {}, h('div.options-row', {}, this.prettySeg, this.controlsEl, this.optionsMore, h('span.spacer'), this.runBtn), this.controlsExtra);
 
     // ---- input panel --------------------------------------------------------
     const makeEditor = (which: 'a' | 'b'): [HTMLTextAreaElement, HTMLElement] => {
@@ -199,7 +242,7 @@ export class PaneView {
         autocomplete: 'off',
         wrap: 'off',
         'aria-label': which === 'a' ? 'Input' : 'Second input',
-        placeholder: 'Paste here, drop a file, or type…',
+        placeholder: this.placeholderFor(which),
       });
       const gutter = h('div.gutter', { 'aria-hidden': 'true' });
       ta.value = which === 'a' ? s.input : (s.inputB ?? '');
@@ -234,18 +277,20 @@ export class PaneView {
     this.inputMeta = h('span.panel-meta');
     this.linkChip = h('button.chip.link-chip', { type: 'button', hidden: true, title: 'Input is piped from another pane — click to unlink' });
     this.linkChip.addEventListener('click', () => board.link(node.id, null));
+    this.detectChip = h<HTMLButtonElement>('button.chip.detect-chip', { type: 'button', hidden: true, title: 'Auto detect chose this tool — click to pick another' });
+    this.detectChip.addEventListener('click', () => document.dispatchEvent(new CustomEvent('c64:palette')));
     const inputHead = h(
       'div.panel-head',
       {},
       h('span.panel-label', {}, 'Input'),
       this.linkChip,
+      this.detectChip,
       this.inputMeta,
       h('span.spacer'),
       this.swapBtn,
       tbtn('paste', 'Paste', 'Paste from clipboard', () => void this.pasteFromClipboard()),
       tbtn('upload', 'Upload', 'Open a local file — it never leaves your browser', () => fileInput.click()),
-      tbtn('sparkle', 'Sample', 'Insert an example for this tool', () => this.insertSample()),
-      tbtn('clear', 'Clear', 'Clear the input', () => this.clearInput()),
+      tbtn('clear', 'Clear', 'Clear the input and return to Auto detect', () => this.clearInput()),
       fileInput,
     );
     this.editorsEl = h(
@@ -294,10 +339,14 @@ export class PaneView {
       this.statusEl,
       h('span.spacer'),
       this.findBox,
-      ibtn('find', 'Find in output (Alt+Shift+F)', () => this.toggleFind()),
       tbtn('copy', 'Copy', 'Copy output (Alt+Shift+C)', () => void this.copyOutput()),
-      tbtn('download', 'Download', 'Save the output as a file', () => this.downloadOutput()),
       tbtn('pipe', 'Send on', 'Open a new pane that keeps reading this output (a pipe)', () => this.sendOn()),
+      ibtn('settings', 'More output actions: find, download', (e) =>
+        menu(e.currentTarget as HTMLElement, [
+          { icon: 'find', label: 'Find in output', keys: 'Alt+Shift+F', run: () => this.toggleFind(true) },
+          { icon: 'download', label: 'Download output', run: () => this.downloadOutput() },
+        ]),
+      'output-more'),
     );
     this.outputWrap = h('div.panel.pane-output', {}, outputHead, this.errorBox, this.notesEl, this.output, this.viewHost);
 
@@ -326,7 +375,16 @@ export class PaneView {
     this.updateEmptyState();
     this.updateInputMeta();
     this.refreshLink();
+    this.refreshDetectChip();
     this.runNow();
+  }
+
+  private placeholderFor(which: 'a' | 'b'): string {
+    if (which === 'b') return 'Paste here, drop a file, or type…';
+    if (this.node.state.sourceId) return 'Waiting for output from the linked pane…';
+    return this.node.state.mode === 'auto'
+      ? 'Paste anything — JSON, JWT, Base64, XML, YAML, CSV, a URL…\nc64 detects the format and picks the tool. Drop a file or press Ctrl+V.'
+      : 'Paste here, drop a file, or type…';
   }
 
   /* ---------------------------------------------------------- accessors */
@@ -392,19 +450,15 @@ export class PaneView {
     const src = this.node.state.sourceId;
     this.linkChip.hidden = !src;
     this.textarea.readOnly = !!src;
-    this.textarea.placeholder = src ? 'Waiting for output from the linked pane…' : 'Paste here, drop a file, or type…';
-    if (src) {
-      this.linkChip.replaceChildren(icon('pipe', 12), h('span', {}, `from ${this.board.titleOf(src)}`), icon('close', 11));
-      this.markUsed();
-    }
+    this.textarea.placeholder = this.placeholderFor('a');
+    if (src) this.linkChip.replaceChildren(icon('pipe', 12), h('span', {}, `from ${this.board.titleOf(src)}`), icon('close', 11));
   }
 
-  /** The pane has been deliberately set up (tool, input or pipe) — no more tool grid. */
-  private markUsed(): void {
-    if (this.node.state.fresh === false) return;
-    this.node.state.fresh = false;
-    this.updateEmptyState();
-    this.board.changed();
+  /** "Detected JSON · change" chip in the input head while Auto's choice stands. */
+  private refreshDetectChip(): void {
+    const on = this.node.state.detected === true && this.node.state.mode !== 'auto';
+    this.detectChip.hidden = !on;
+    if (on) this.detectChip.replaceChildren(icon('sparkle', 12), h('span', {}, `Detected ${detectedName(this.node.state.mode) ?? this.mode.label} · change`));
   }
 
   destroy(): void {
@@ -415,20 +469,25 @@ export class PaneView {
 
   /* ------------------------------------------------------------ actions */
 
-  setMode(id: string): void {
+  /**
+   * Switch tool. A manual choice (sidebar, select, chips, palette, Explain)
+   * clears `detected`; Auto detect passes `detected: true` so the chip shows.
+   */
+  setMode(id: string, opts: { detected?: boolean } = {}): void {
     this.node.state.mode = id;
-    this.node.state.fresh = false;
+    this.node.state.detected = opts.detected === true ? true : undefined;
     this.modeSelect.value = id;
     this.renderControls();
     this.applyDual();
     this.updateInputMeta();
     this.updateEmptyState();
+    this.refreshDetectChip();
+    this.textarea.placeholder = this.placeholderFor('a');
     this.board.changed();
     this.runNow();
   }
 
   setInput(text: string, which: 'a' | 'b' = 'a'): void {
-    this.markUsed();
     const ta = which === 'b' ? this.textareaB : this.textarea;
     if (ta.value === text) return;
     ta.value = text;
@@ -447,11 +506,31 @@ export class PaneView {
     toast(`Sample ${this.mode.label} inserted`);
   }
 
+  /** Empty the editor(s) and return the pane to Auto detect. */
   clearInput(): void {
     if (this.node.state.sourceId) this.board.link(this.node.id, null);
     this.setInput('');
     if (this.dual) this.setInput('', 'b');
+    if (this.node.state.mode !== 'auto') this.setMode('auto');
     this.textarea.focus();
+  }
+
+  /** Primary action button: run now and flash the output; Shift copies it too. */
+  runPrimary(copy = false): void {
+    this.runNow();
+    const out = this.outputWrap;
+    out.classList.remove('flash');
+    void out.offsetWidth;
+    out.classList.add('flash');
+    setTimeout(() => out.classList.remove('flash'), 300);
+    if (copy) setTimeout(() => void this.copyOutput(), 0);
+  }
+
+  private toggleOptions(force?: boolean): void {
+    this.optionsOpen = force ?? !this.optionsOpen;
+    this.controlsExtra.hidden = !this.optionsOpen;
+    this.optionsMore.setAttribute('aria-expanded', String(this.optionsOpen));
+    this.optionsMore.classList.toggle('is-open', this.optionsOpen);
   }
 
   togglePretty(): void {
@@ -465,6 +544,7 @@ export class PaneView {
     this.node.state.layout = this.node.state.layout === 'side' ? 'stacked' : 'side';
     this.applyLayout();
     this.board.changed();
+    toast(this.node.state.layout === 'side' ? 'Input beside output' : 'Input above output');
   }
 
   toggleWrap(): void {
@@ -610,13 +690,22 @@ export class PaneView {
   private openMenu(anchor: HTMLElement): void {
     const s = this.node.state;
     const others = this.board.otherPanes(this.node.id);
+    const side = s.layout === 'side';
+    const zoomed = this.board.isZoomed(this.node.id);
     const items: MenuItem[] = [
-      { icon: 'edit', label: 'Rename pane…', run: () => this.board.rename(this.node.id) },
-      { icon: 'duplicate', label: 'Duplicate pane', run: () => this.board.duplicate(this.node.id) },
-      { icon: this.board.isZoomed(this.node.id) ? 'minimize' : 'maximize', label: this.board.isZoomed(this.node.id) ? 'Restore all panes' : 'Maximise pane', keys: 'Alt+Shift+Enter', run: () => this.board.zoom(this.node.id) },
-      { icon: 'wrap', label: s.wrap ? 'Stop wrapping lines' : 'Wrap long lines', run: () => this.toggleWrap() },
+      { icon: 'help', label: 'About this tool', run: () => this.toggleInfo(true) },
+      { icon: 'sparkle', label: `Try a ${this.mode.label} sample`, run: () => this.insertSample() },
       { sep: true },
-      { icon: 'pipe', label: 'Send output to a new pane', run: () => this.sendOn() },
+      { icon: side ? 'rows' : 'columns', label: side ? 'Stack input above output' : 'Put input beside output', keys: 'Alt+Shift+L', run: () => this.toggleLayout() },
+      { icon: zoomed ? 'minimize' : 'maximize', label: zoomed ? 'Restore all panes' : 'Maximise pane', keys: 'Alt+Shift+Enter', run: () => this.board.zoom(this.node.id) },
+      { icon: 'wrap', label: s.wrap ? 'Stop wrapping lines' : 'Wrap long lines', keys: 'Alt+Shift+O', run: () => this.toggleWrap() },
+      { sep: true },
+      { icon: 'splitRight', label: 'Add pane to the right', keys: 'Alt+Shift+R', run: () => this.board.addRight(this.node.id) },
+      { icon: 'splitDown', label: 'Add pane below', keys: 'Alt+Shift+B', run: () => this.board.addBelow(this.node.id) },
+      { icon: 'duplicate', label: 'Duplicate pane', keys: 'Alt+Shift+D', run: () => this.board.duplicate(this.node.id) },
+      { icon: 'edit', label: 'Rename pane…', run: () => this.board.rename(this.node.id) },
+      { sep: true },
+      { icon: 'pipe', label: 'Send output to a new pane', keys: 'Alt+Shift+N', run: () => this.sendOn() },
       ...(others.length
         ? [{ icon: 'pipe', label: 'Read input from…', children: others.map((o) => ({ label: o.title, run: () => this.board.link(this.node.id, o.id) })) }]
         : []),
@@ -624,6 +713,8 @@ export class PaneView {
       { sep: true },
       { icon: 'arrowLeft', label: 'Swap with previous pane', run: () => this.board.swap(this.node.id, -1) },
       { icon: 'arrowRight', label: 'Swap with next pane', run: () => this.board.swap(this.node.id, 1) },
+      { sep: true },
+      ...(this.board.canClose() ? [{ icon: 'close', label: 'Close pane', keys: 'Alt+Shift+W', run: () => this.board.close(this.node.id) }] : []),
     ];
     menu(anchor, items);
   }
@@ -631,14 +722,35 @@ export class PaneView {
   private onInput(): void {
     this.node.state.input = this.textarea.value;
     if (this.dual) this.node.state.inputB = this.textareaB.value || undefined;
-    if (this.node.state.input !== '' || this.node.state.inputB) this.node.state.fresh = false;
     this.updateEmptyState();
     this.updateInputMeta();
     this.renderGutter();
     this.board.changed();
     this.explain.refresh();
+    if (this.node.state.mode === 'auto' && !this.node.state.detected && this.detect()) return; // setMode ran it
     if (this.runTimer !== undefined) clearTimeout(this.runTimer);
     this.runTimer = window.setTimeout(() => this.runNow(), DEBOUNCE_MS);
+  }
+
+  /**
+   * Auto detect: once the input is non-trivial, ask the Explain heuristics
+   * what it is and switch to the matching tool (keeping `detected` so the
+   * chip shows). Returns true when the pane switched.
+   */
+  private detect(): boolean {
+    const text = this.node.state.input.trim();
+    if (text.length > DETECT_MAX_CHARS) return false;
+    if (text.length < DETECT_MIN_CHARS && !(text.length >= 4 && /[{[<.%=]/.test(text))) return false;
+    let d: ReturnType<typeof detectMode>;
+    try {
+      d = detectMode(explain(text));
+    } catch {
+      return false;
+    }
+    if (!d) return false;
+    if (d.options) Object.assign(this.node.state.options, d.options);
+    this.setMode(d.mode, { detected: true });
+    return true;
   }
 
   private insertAtCursor(text: string): void {
@@ -670,6 +782,7 @@ export class PaneView {
 
   private setOption(key: string, value: unknown): void {
     this.node.state.options[key] = value;
+    this.runBtn.textContent = primaryLabel(this.mode, this.node.state.options);
     this.board.changed();
     this.runNow();
   }
@@ -771,11 +884,14 @@ export class PaneView {
 
   private renderControls(): void {
     this.controlsEl.replaceChildren();
+    this.controlsExtra.replaceChildren();
     const s = this.node.state;
     const m = this.mode;
     this.modeIcon.replaceChildren(icon(m.icon, 16));
     this.descEl.textContent = m.description;
-    for (const c of m.controls) {
+    // The first three options stay on the row; the rest fold behind "Options ▾".
+    m.controls.forEach((c, i) => {
+      const into = i < 3 ? this.controlsEl : this.controlsExtra;
       switch (c.kind) {
         case 'select': {
           const sel = h<HTMLSelectElement>('select.control', { 'aria-label': c.label, title: c.label });
@@ -783,7 +899,7 @@ export class PaneView {
           sel.value = typeof s.options[c.key] === 'string' ? (s.options[c.key] as string) : c.default;
           if (sel.value !== (s.options[c.key] ?? c.default)) sel.value = c.default;
           sel.addEventListener('change', () => this.setOption(c.key, sel.value));
-          this.controlsEl.append(h('label.control-wrap', {}, h('span.control-label', {}, c.label), sel));
+          into.append(h('label.control-wrap', {}, h('span.control-label', {}, c.label), sel));
           break;
         }
         case 'toggle': {
@@ -794,7 +910,7 @@ export class PaneView {
             btn.setAttribute('aria-pressed', String(next));
             this.setOption(c.key, next);
           });
-          this.controlsEl.append(btn);
+          into.append(btn);
           break;
         }
         case 'text': {
@@ -817,13 +933,15 @@ export class PaneView {
               this.setOption(c.key, input.value);
             }
           });
-          this.controlsEl.append(h('label.control-wrap.grow', {}, h('span.control-label', {}, c.label), input));
+          into.append(h('label.control-wrap.grow', {}, h('span.control-label', {}, c.label), input));
           break;
         }
       }
-    }
+    });
     this.prettySeg.hidden = !m.supportsPretty;
-    this.optionsBar.hidden = !m.supportsPretty && m.controls.length === 0;
+    this.optionsMore.hidden = m.controls.length <= 3;
+    if (m.controls.length <= 3) this.toggleOptions(false);
+    this.runBtn.textContent = primaryLabel(m, s.options);
   }
 
   private updatePrettyButton(): void {
@@ -837,71 +955,45 @@ export class PaneView {
     const side = this.node.state.layout === 'side';
     this.body.classList.toggle('is-side', side);
     this.seam.setAttribute('aria-orientation', side ? 'vertical' : 'horizontal');
-    this.layoutBtn.replaceChildren(icon(side ? 'rows' : 'columns'));
-    this.layoutBtn.title = side ? 'Stack input above output (Alt+Shift+L)' : 'Put input and output side by side (Alt+Shift+L)';
-    this.layoutBtn.setAttribute('aria-label', this.layoutBtn.title);
   }
 
   private updateEmptyState(): void {
     const empty = this.node.state.input === '' && !(this.dual && this.node.state.inputB);
-    const fresh = this.node.state.fresh !== false;
+    const auto = this.node.state.mode === 'auto';
     this.body.classList.toggle('is-empty', empty);
-    this.body.classList.toggle('is-ready', empty && !fresh);
     this.picker.hidden = !empty;
-    const freshEl = this.picker.querySelector<HTMLElement>('.picker-fresh');
-    const readyEl = this.picker.querySelector<HTMLElement>('.picker-ready');
-    if (freshEl) freshEl.hidden = !fresh;
-    if (readyEl) readyEl.hidden = fresh;
+    const chips = this.picker.querySelector<HTMLElement>('.start-chips');
+    const ready = this.picker.querySelector<HTMLElement>('.picker-ready');
+    if (chips) chips.hidden = !auto;
+    if (ready) ready.hidden = auto;
     const hint = this.picker.querySelector<HTMLElement>('.picker-hint');
     if (hint) hint.textContent = this.mode.emptyHint;
-    const sampleLabel = this.picker.querySelector<HTMLElement>('.picker-sample-label');
-    if (sampleLabel) sampleLabel.textContent = `Not sure? Try a ${this.mode.label} sample`;
-    for (const card of this.picker.querySelectorAll<HTMLElement>('.tool-card')) {
-      card.classList.toggle('is-current', card.dataset['mode'] === this.node.state.mode);
-    }
   }
 
   /**
-   * Empty-state under the editor. Two faces, one at a time:
-   *   .picker-fresh — the tool grid, for a pane nobody has set up yet;
-   *   .picker-ready — the mode's hint + Sample / Paste / Upload, once a tool
-   *                   was chosen (so the user is not asked "which tool?" twice).
+   * Empty-state strip under the editor. Two faces, one at a time:
+   *   .start-chips  — Auto detect: a row of common tools + "All N tools ›";
+   *   .picker-ready — any other tool: its hint and a "Try a sample" button.
    */
   private buildPicker(): HTMLElement {
-    const grid = h('div.tool-grid');
-    for (const cat of CATEGORIES) {
-      const tools = MODES.filter((m) => m.category === cat);
-      if (!tools.length) continue;
-      const section = h('section.tool-section', {}, h('h4', {}, cat));
-      const cards = h('div.tool-cards');
-      for (const m of tools) {
-        const card = h('button.tool-card', { type: 'button', 'data-mode': m.id, title: `Switch this pane to ${m.label}` }, h('span.tool-icon', {}, icon(m.icon, 18)), h('span.tool-name', {}, m.label), h('span.tool-desc', {}, m.description));
-        card.addEventListener('click', () => {
-          this.setMode(m.id);
-          this.textarea.focus();
-        });
-        cards.append(card);
-      }
-      section.append(cards);
-      grid.append(section);
+    const chips = h('div.start-chips', { hidden: true });
+    for (const [id, label] of START_CHIPS) {
+      if (!MODES.some((m) => m.id === id)) continue;
+      const chip = h('button.start-chip', { type: 'button', title: `Switch this pane to ${getMode(id).label}` }, label);
+      chip.addEventListener('click', () => {
+        this.setMode(id);
+        this.textarea.focus();
+      });
+      chips.append(chip);
     }
-    const gridSample = h('button.btn.small.picker-sample-label', { type: 'button' });
-    gridSample.addEventListener('click', () => this.insertSample());
-    const fresh = h('div.picker-fresh', {}, h('p.picker-lead', {}, 'Pick a tool'), grid, h('p.picker-foot.muted', {}, gridSample));
+    const all = h('button.start-chip.start-all', { type: 'button', title: 'Open the command palette (⌘/Ctrl+K)' }, `All ${MODES.length - 1} tools ›`);
+    all.addEventListener('click', () => document.dispatchEvent(new CustomEvent('c64:palette')));
+    chips.append(all);
 
     const sampleBtn = h('button.btn.primary', { type: 'button' }, icon('sparkle', 14), h('span', {}, 'Try a sample'));
     sampleBtn.addEventListener('click', () => this.insertSample());
-    const pasteBtn = h('button.btn.small', { type: 'button', title: 'Paste from clipboard' }, icon('paste', 13), h('span', {}, 'Paste'));
-    pasteBtn.addEventListener('click', () => void this.pasteFromClipboard());
-    const uploadBtn = h('button.btn.small', { type: 'button', title: 'Open a local file — it never leaves your browser' }, icon('upload', 13), h('span', {}, 'Upload'));
-    uploadBtn.addEventListener('click', () => this.fileInput.click());
-    const ready = h(
-      'div.picker-ready',
-      { hidden: true },
-      h('p.picker-hint'),
-      h('div.picker-actions', {}, sampleBtn, pasteBtn, uploadBtn, h('span.muted', {}, 'or drop a file here')),
-    );
-    return h('div.picker', { hidden: true }, fresh, ready);
+    const ready = h('div.picker-ready', { hidden: true }, h('p.picker-hint'), sampleBtn);
+    return h('div.picker', { hidden: true }, chips, ready);
   }
 
   private renderResult(r: ModeResult): void {
@@ -971,6 +1063,12 @@ export class PaneView {
   private paintOutput(text: string): void {
     const m = this.mode;
     const s = this.node.state;
+    const placeholder = text === '' && s.input.trim() === '' && !(this.dual && s.inputB);
+    this.output.classList.toggle('is-placeholder', placeholder);
+    if (placeholder) {
+      this.output.textContent = 'Result appears here as you type.';
+      return;
+    }
     const lang = typeof m.outputLanguage === 'function' ? m.outputLanguage({ pretty: s.pretty, options: s.options }) : m.outputLanguage;
     highlightInto(this.output, text, lang);
   }

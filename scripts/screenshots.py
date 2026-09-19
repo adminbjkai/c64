@@ -52,8 +52,8 @@ BOARDS = {
     "workspace": split("row", [0.42, 0.58], pane("json", SAMPLE_JSON, title="Payload"), split("col", [0.55, 0.45], pane("json-tree", SAMPLE_JSON, title="Tree"), pane("jwt", JWT, layout="side"))),
     "pipes": split("row", [0.34, 0.33, 0.33], pane("yaml", YAML, title="YAML in", pretty=False), pane("json", '{"server":{"host":"0.0.0.0","port":8166},"features":["offline","pipes","boards"],"limits":{"rps":1200}}', title="→ JSON", sourceId="src"), pane("json-to-types", '{"server":{"host":"0.0.0.0","port":8166},"features":["offline","pipes","boards"],"limits":{"rps":1200}}', title="→ TypeScript", sourceId="mid")),
     "tools": split("row", [0.5, 0.5], split("col", [0.5, 0.5], pane("diff", DIFF, title="Diff"), pane("hash", "The quick brown fox jumps over the lazy dog", title="Hashes")), split("col", [0.5, 0.5], pane("markdown", MD, title="Markdown"), pane("regex", "2026-09-18 ERROR db: timeout after 30s\n2026-09-18 WARN cache: miss rate 12%\n2026-09-19 ERROR api: 502 from upstream", title="Regex", options={"pattern": r"(?<date>\d{4}-\d{2}-\d{2}) (?<level>ERROR|WARN) (?<src>\w+):", "flags": "g"}))),
-    "compare": split("row", [0.55, 0.45], pane("json-diff", '{"name":"c64","version":"1.0.0","tags":["json","yaml"],"limits":{"rps":1200,"burst":null},"owner":"murry"}', title="Release diff", inputB='{"name":"c64","version":"1.1.0","tags":["json","yaml","toml"],"limits":{"rps":"1200","burst":50},"maintainer":"murry"}', fresh=False), split("col", [0.5, 0.5], pane("qr-code", "https://c64.bjk.ai", fresh=False), pane("totp", "JBSWY3DPEHPK3PXP", fresh=False))),
-    "empty": pane("json", ""),
+    "compare": split("row", [0.55, 0.45], pane("json-diff", '{"name":"c64","version":"1.0.0","tags":["json","yaml"],"limits":{"rps":1200,"burst":null},"owner":"murry"}', title="Release diff", inputB='{"name":"c64","version":"1.1.0","tags":["json","yaml","toml"],"limits":{"rps":"1200","burst":50},"maintainer":"murry"}'), split("col", [0.5, 0.5], pane("qr-code", "https://c64.bjk.ai"), pane("totp", "JBSWY3DPEHPK3PXP"))),
+    "empty": pane("auto", "", layout="side", seam=0.5),
 }
 # Fix pipe ids so the linked panes point at real neighbours.
 p = BOARDS["pipes"]
@@ -81,7 +81,7 @@ def main():
                 ctx = browser.new_context(viewport={"width": width, "height": height}, device_scale_factor=2, is_mobile=mobile, has_touch=mobile, color_scheme=theme)
                 page = ctx.new_page()
                 board = BOARDS[board_key]
-                file = {"current": "b1", "boards": [{"id": "b1", "name": "Release checks", "root": board, "updated": 0}, {"id": "b2", "name": "Scratch", "root": pane("json", ""), "updated": 0}]}
+                file = {"current": "b1", "boards": [{"id": "b1", "name": "Release checks", "root": board, "updated": 0}, {"id": "b2", "name": "Scratch", "root": pane("auto", ""), "updated": 0}]}
                 page.add_init_script(f"localStorage.setItem('c64.boards.v1', {json.dumps(json.dumps(file))}); localStorage.setItem('c64.theme', '{theme}'); localStorage.setItem('c64.prefs.v1', JSON.stringify({{sidebar: '{'closed' if mobile else 'open'}', fontSize: 13}}));")
                 page.goto(base, wait_until="networkidle")
                 page.wait_for_timeout(700)

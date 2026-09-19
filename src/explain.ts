@@ -210,17 +210,35 @@ export function explain(input: string): Explanation {
     }
   }
 
-  // ---- A few shapes we recognise but have no dedicated mode for.
-  if (/^[0-9a-f]+$/i.test(text.replace(/\s/g, '')) && text.replace(/\s/g, '').length % 2 === 0 && text.length >= 8) {
-    reasons.push(`Only hex digits, even length — ${text.replace(/\s/g, '').length / 2} bytes.`);
-    return { shape: 'Hex-encoded bytes', confidence: 'medium', reasons, suggestions: [] };
+  // ---- Hex bytes (letters required: pure digits are more likely a number).
+  const compact = text.replace(/\s/g, '');
+  if (/^[0-9a-f]+$/i.test(compact) && /[a-f]/i.test(compact) && compact.length % 2 === 0 && compact.length >= 8) {
+    reasons.push(`Only hex digits, even length — ${compact.length / 2} bytes.`);
+    return { shape: 'Hex-encoded bytes', confidence: 'medium', reasons, suggestions: [{ label: 'Decode the bytes', mode: 'hex', options: { mode: 'hex-to-text' } }] };
+  }
+
+  // ---- URLs and URL-ish encodings.
+  if (/^https?:\/\/\S+$/.test(text)) {
+    return { shape: 'URL', confidence: 'high', reasons: ['A single http(s) address.'], suggestions: [{ label: 'Break it down', mode: 'url' }, { label: 'Query string → JSON', mode: 'query-string' }] };
+  }
+  if (/^(?:www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:\/\S*)?$/i.test(text) && (text.startsWith('www.') || text.includes('/'))) {
+    return { shape: 'URL', confidence: 'medium', reasons: ['Looks like a host name with a path (no scheme).'], suggestions: [{ label: 'Break it down', mode: 'url' }] };
   }
   if (/^[^\s=&]+=[^&\s]*(&[^\s=&]+=[^&\s]*)*$/.test(text)) {
     reasons.push('key=value pairs joined by & — a URL query string.');
-    return { shape: 'URL query string', confidence: 'medium', reasons, suggestions: [] };
+    return { shape: 'URL query string', confidence: 'medium', reasons, suggestions: [{ label: 'Query string → JSON', mode: 'query-string' }] };
   }
-  if (/^https?:\/\/\S+$/.test(text)) {
-    return { shape: 'URL', confidence: 'high', reasons: ['A single http(s) address.'], suggestions: [] };
+  const escapes = text.match(/%[0-9A-Fa-f]{2}/g)?.length ?? 0;
+  if (escapes >= 2) {
+    reasons.push(`${escapes} percent-escapes (%XX) — URL-encoded text.`);
+    return { shape: 'URL-encoded text', confidence: 'high', reasons, suggestions: [{ label: 'Decode it', mode: 'url', options: { direction: 'decode' } }] };
+  }
+
+  // ---- Cron: 5–7 fields of digits, * / , - (names allowed for months / days).
+  const cronFields = text.split(/\s+/);
+  if (cronFields.length >= 5 && cronFields.length <= 7 && !text.includes('\n') && cronFields.every((f) => /^[\d*\/,\-?LW#A-Za-z]+$/.test(f) && !/^[A-Za-z]{4,}$/.test(f)) && cronFields.filter((f) => /[\d*]/.test(f)).length >= 3) {
+    reasons.push(`${cronFields.length} whitespace-separated fields of digits, *, / and ranges — a cron expression.`);
+    return { shape: 'Cron expression', confidence: 'medium', reasons, suggestions: [{ label: 'Explain the schedule', mode: 'cron' }] };
   }
 
   reasons.push(`No structured format matched (${stats(text)}).`);
@@ -230,4 +248,40 @@ export function explain(input: string): Explanation {
     reasons,
     suggestions: [{ label: 'Encode as Base64', mode: 'base64', options: { direction: 'encode' } }],
   };
+}
+
+/** Tools Auto detect may switch a pane to, with the short name for the chip. */
+const DETECT_TARGETS: Record<string, string> = {
+  jwt: 'JWT', json: 'JSON', base64: 'Base64', xml: 'XML', css: 'CSS', csv: 'CSV', yaml: 'YAML',
+  hex: 'Hex', url: 'URL', 'query-string': 'Query string', cron: 'Cron',
+};
+
+/** Short name used by the "Detected … · change" chip, if `modeId` is a detect target. */
+export function detectedName(modeId: string): string | undefined {
+  return DETECT_TARGETS[modeId];
+}
+
+export interface Detection {
+  mode: string;
+  /** Short name for the "Detected … · change" chip. */
+  name: string;
+  options?: Record<string, unknown>;
+}
+
+/**
+ * Map an explanation to the tool Auto detect should switch to, or null to
+ * stay in Auto. Switches on high confidence, or medium when the first
+ * suggestion is a dedicated tool; never on low (plain text).
+ */
+export function detectMode(ex: Explanation): Detection | null {
+  if (ex.confidence === 'low') return null;
+  const first = ex.suggestions[0];
+  if (!first) return null;
+  const name = DETECT_TARGETS[first.mode];
+  if (!name) return null;
+  // Short base64-looking words are more often just words.
+  if (ex.shape === 'Base64-encoded binary') return null;
+  const d: Detection = { mode: first.mode, name };
+  if (first.options) d.options = first.options;
+  return d;
 }

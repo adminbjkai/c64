@@ -153,26 +153,27 @@ test('sanitize repairs bad sizes and drops garbage, returns null for junk', () =
   assert.equal(lone?.type, 'pane');
 });
 
-test('fresh: new panes are fresh, clones are not', () => {
-  assert.equal(defaultPaneState().fresh, true);
-  assert.equal(createPane({ mode: 'jwt' }).state.fresh, true);
-  assert.equal(defaultPaneState({ fresh: false }).fresh, false);
-  const a = createPane({ input: 'x' });
-  assert.equal(clonePane(a).state.fresh, false);
-  a.state.fresh = true;
-  assert.equal(clonePane(a).state.fresh, false);
+test('new panes start in Auto detect; clones keep their tool and drop the detected flag only when told', () => {
+  assert.equal(defaultPaneState().mode, 'auto');
+  assert.equal(createPane({ mode: 'jwt' }).state.mode, 'jwt');
+  const a = createPane({ mode: 'json', input: 'x', detected: true });
+  assert.equal(clonePane(a).state.mode, 'json');
+  assert.equal(clonePane(a).state.detected, true);
+  assert.ok(!('fresh' in defaultPaneState()));
 });
 
-test('sanitize keeps fresh and infers it for legacy records', () => {
-  const p = (state: Record<string, unknown>) => (sanitize({ type: 'pane', id: 'p', state }) as { state: { fresh?: boolean } }).state.fresh;
-  assert.equal(p({ fresh: true, input: 'x' }), true);
-  assert.equal(p({ fresh: false, input: '' }), false);
-  assert.equal(p({ fresh: 'yes' }), true); // non-boolean falls back to inference (empty json)
-  // legacy: untouched empty JSON pane is fresh; anything else was set up
-  assert.equal(p({ mode: 'json', input: '' }), true);
-  assert.equal(p({}), true);
-  assert.equal(p({ mode: 'jwt', input: '' }), false);
-  assert.equal(p({ mode: 'json', input: '{}' }), false);
+test('sanitize keeps detected and maps legacy fresh panes to Auto', () => {
+  const p = (state: Record<string, unknown>) => (sanitize({ type: 'pane', id: 'p', state }) as { state: { mode: string; detected?: boolean; fresh?: unknown } }).state;
+  assert.equal(p({ detected: true, mode: 'json', input: '{}' }).detected, true);
+  assert.equal(p({ detected: 'yes', mode: 'json' }).detected, undefined);
+  // legacy: an untouched fresh pane becomes Auto; anything set up keeps its tool
+  assert.equal(p({ fresh: true, mode: 'json', input: '' }).mode, 'auto');
+  assert.equal(p({ fresh: true, mode: 'jwt', input: '' }).mode, 'auto');
+  assert.equal(p({ fresh: true, mode: 'json', input: '{}' }).mode, 'json');
+  assert.equal(p({ fresh: false, mode: 'json', input: '' }).mode, 'json');
+  assert.equal(p({ mode: 'jwt', input: '' }).mode, 'jwt');
+  assert.equal(p({}).mode, 'json');
+  assert.ok(!('fresh' in p({ fresh: true })));
 });
 
 test('findParent locates the immediate split', () => {

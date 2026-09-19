@@ -6,6 +6,32 @@ All notable changes to c64 are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Auto detect** pseudo-tool (category *Start*, first in the sidebar): every
+  new pane starts in it. Paste anything and the pane switches to the right
+  tool — JSON, JWT, Base64, XML, CSS, CSV, YAML, hex, URL, URL-encoded text,
+  query string or cron — showing a "Detected … · change" chip. Manual choices
+  win; *Clear* returns the pane to Auto. Explain now recognises URL-encoded
+  text, bare host/path URLs and cron expressions.
+- **Primary action button** at the right of every options bar ("Format JSON",
+  "Decode JWT", "Compare", "Show table", …); Shift+click runs and copies.
+- Start chips under the empty Auto editor (JSON · Base64 · JWT · Diff · YAML ·
+  Convert · All 53 tools ›).
+
+### Changed
+- New panes on boards ≥ 900 px wide put input and output **side by side**;
+  saved boards keep their layout. The output status is the prominent line,
+  with a green / red dot; an empty output reads "Result appears here as you type."
+- Less chrome: the tool grid, topbar hint and Shortcuts button are gone (the
+  shortcut list is in the palette as "Keyboard shortcuts" and on Alt+Shift+/).
+  Layout, maximise, split, close and the ? panel moved into the pane's ⋯ menu
+  (the icons return on multi-pane boards); Find and Download sit behind ⋯ in
+  the output head; tools with more than three options fold the rest behind
+  "Options ▾". One "+ Pane ▾" topbar button replaces the two split buttons.
+  The sidebar starts collapsed on a first visit.
+- The `fresh` pane flag is replaced by `detected`; legacy untouched panes load
+  as Auto.
+
 ## [1.1.1] — 2026-09-19
 
 ### Fixed

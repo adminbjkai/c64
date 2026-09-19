@@ -1,10 +1,13 @@
 /**
  * Mode registry. Adding a tool type = implement ToolMode and list it here;
- * the sidebar, the pane header's dropdown and the empty-pane picker are all
- * generated from this list, grouped by category in CATEGORIES order.
+ * the sidebar, the pane header's dropdown and the command palette are all
+ * generated from this list, grouped by category in CATEGORIES order. The
+ * first entry, Auto detect, is the pseudo-tool every new pane starts in.
  */
 
 import type { ToolMode } from './types.js';
+// Start
+import { autoMode } from './auto.js';
 // JSON
 import { jsonMode } from './json.js';
 import { jsonTreeMode, jsonPathMode } from './json-tree.js';
@@ -68,6 +71,7 @@ import { ipSubnetMode } from './ip-subnet.js';
 import { chmodMode } from './chmod.js';
 
 export const MODES: ToolMode[] = [
+  autoMode,
   jsonMode, jsonTreeMode, jsonPathMode, jsonGraphMode, jsonTableMode, jsonSchemaMode, jsonFlattenMode, jsonSortMode, jsonToTypesMode,
   xmlMode, yamlMode, tomlMode, csvMode, htmlMode, sqlMode, convertMode,
   jsonDiffMode, xmlDiffMode, yamlDiffMode, jsonPatchMode, diffMode, listCompareMode,
@@ -80,7 +84,7 @@ export const MODES: ToolMode[] = [
 ];
 
 export function getMode(id: string): ToolMode {
-  return MODES.find((m) => m.id === id) ?? MODES[0]!;
+  return MODES.find((m) => m.id === id) ?? jsonMode;
 }
 
 export { CATEGORIES } from './types.js';
