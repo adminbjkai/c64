@@ -47,3 +47,14 @@ test('truncates huge documents breadth-first and caps rows per card', () => {
   assert.equal(w.nodes[0]!.rows.length, 6);
   assert.equal(w.nodes[0]!.rows[5]!.cls, 'more');
 });
+
+test('cards with child cards reserve room for the collapse toggle', () => {
+  // nodes[1] has a long title (so the title, not minWidth, sets its width) and one child card
+  const doc = { abcdefghijklmnopqrst: { x: {} } };
+  const without = buildGraph(doc, { toggleWidth: 0 }).nodes[1]!.width;
+  const withToggle = buildGraph(doc, { toggleWidth: 100 }).nodes[1]!.width;
+  assert.equal(withToggle, without + 100);
+  // the same card without child cards gets no extra room
+  const leaf = { abcdefghijklmnopqrst: {} };
+  assert.equal(buildGraph(leaf, { toggleWidth: 0 }).nodes[1]!.width, buildGraph(leaf, { toggleWidth: 100 }).nodes[1]!.width);
+});

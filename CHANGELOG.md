@@ -6,6 +6,11 @@ All notable changes to c64 are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-09-19
+
+Paste-first redesign, planned against jsonformatter.org, base64decode.org,
+jsoncrack.com and the Prettier playground: paste → result, one obvious action.
+
 ### Added
 - **Auto detect** pseudo-tool (category *Start*, first in the sidebar): every
   new pane starts in it. Paste anything and the pane switches to the right
@@ -31,6 +36,11 @@ All notable changes to c64 are recorded here. The format follows
   The sidebar starts collapsed on a first visit.
 - The `fresh` pane flag is replaced by `detected`; legacy untouched panes load
   as Auto.
+- **JSON Graph rebuilt** in the jsoncrack style: the canvas fills the pane,
+  a floating pill holds zoom / fit / search / collapse controls, node search
+  highlights and centres matches, clicking a card opens a details drawer
+  (path, summary, raw subtree, copy / select in editor), and any container
+  card can be collapsed. Very large documents start partially collapsed.
 
 ## [1.1.1] — 2026-09-19
 
@@ -133,7 +143,8 @@ Initial workspace: JSON format/validate, tree, path and graph views, XML,
 YAML, CSV/TSV, Convert, Base64, JWT decode, Minify/Prettify and CSS, in
 tileable panes with a Web Worker for large inputs and an Explain helper.
 
-[Unreleased]: https://github.com/adminbjkai/c64/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/adminbjkai/c64/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/adminbjkai/c64/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/adminbjkai/c64/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/adminbjkai/c64/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/adminbjkai/c64/releases/tag/v1.0.0

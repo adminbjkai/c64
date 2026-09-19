@@ -49,6 +49,10 @@ export interface GraphOptions {
   maxWidth?: number;
   gapX?: number;
   gapY?: number;
+  /** Title glyph width (titles render slightly larger than rows). */
+  titleCharWidth?: number;
+  /** Extra title width reserved for the expand/collapse glyph on cards with child cards. */
+  toggleWidth?: number;
 }
 
 const DEFAULTS: Required<GraphOptions> = {
@@ -62,6 +66,8 @@ const DEFAULTS: Required<GraphOptions> = {
   maxWidth: 340,
   gapX: 28,
   gapY: 56,
+  titleCharWidth: 7.8,
+  toggleWidth: 20,
 };
 
 const isContainer = (v: unknown): v is object => v !== null && typeof v === 'object';
@@ -94,9 +100,10 @@ export function buildGraph(value: unknown, options: GraphOptions = {}): Graph {
   const nodes: GraphNode[] = [];
   let truncated = false;
 
-  const measure = (node: GraphNode): void => {
-    const longest = Math.max(node.title.length, ...node.rows.map((r) => r.key.length + 2 + r.value.length));
-    node.width = Math.min(o.maxWidth, Math.max(o.minWidth, Math.ceil(longest * o.charWidth) + o.padding * 2));
+  const measure = (node: GraphNode, hasKids: boolean): void => {
+    const titleW = node.title.length * o.titleCharWidth + (hasKids ? o.toggleWidth : 0);
+    const longest = Math.max(titleW, ...node.rows.map((r) => (r.key.length + 2 + r.value.length) * o.charWidth));
+    node.width = Math.min(o.maxWidth, Math.max(o.minWidth, Math.ceil(longest) + o.padding * 2));
     node.height = o.titleHeight + node.rows.length * o.rowHeight + (node.rows.length ? o.padding : 0);
   };
 
@@ -125,12 +132,14 @@ export function buildGraph(value: unknown, options: GraphOptions = {}): Graph {
       y: 0,
     };
     const name = item.segs.length ? String(item.segs[item.segs.length - 1]) : '$';
+    let hasKids = false;
     if (isContainer(v)) {
       node.title = `${name} ${sizeLabel(v)}`;
       const entries: [string | number, unknown][] = Array.isArray(v) ? v.map((x, i) => [i, x]) : Object.entries(v);
       let hiddenRows = 0;
       for (const [k, child] of entries) {
         if (isContainer(child)) {
+          hasKids = true;
           queue.push({ value: child, segs: [...item.segs, k], parent: id, label: String(k) });
         } else if (node.rows.length < o.maxRows) {
           const lit = rowLiteral(child);
@@ -143,7 +152,7 @@ export function buildGraph(value: unknown, options: GraphOptions = {}): Graph {
       node.title = name;
       node.rows.push({ key: '', value: lit.value, cls: lit.cls });
     }
-    measure(node);
+    measure(node, hasKids);
     nodes.push(node);
     if (item.parent !== null) nodes[item.parent]!.children.push(id);
   }

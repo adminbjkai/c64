@@ -16,7 +16,7 @@ export function runJsonGraph(input: string, _ctx: RunContext): ModeResult {
   if (input.trim() === '') return { output: '', status: '' };
   try {
     const { value, notes, spans } = parseJsonWithSpans(input);
-    const graph = buildGraph(value);
+    const graph = buildGraph(value, { maxNodes: 4000 });
     const data: GraphData = { graph, spans };
     const n = graph.nodes.length;
     return {
@@ -33,10 +33,10 @@ export function runJsonGraph(input: string, _ctx: RunContext): ModeResult {
 export const jsonGraphMode: ToolMode = {
   id: 'json-graph',
   label: 'JSON Graph',
-  description: 'See the structure as a tidy tree of cards you can zoom, pan and click.',
+  description: 'See the structure as a tidy tree of cards: zoom, pan, search, collapse branches and inspect any value.',
   category: 'JSON',
   icon: 'graph',
-  emptyHint: 'Paste JSON to see it as a tidy tree of cards. Scroll to zoom, drag to pan, click a card to select it in the editor.',
+  emptyHint: 'Paste JSON to see it as a tidy tree of cards. Scroll to zoom, drag to pan, press / to search, click a card for its path and raw value, ⊟ to collapse a branch.',
   sample: JSON.stringify({
     order: { id: 'A-1042', total: 149.5, customer: { name: 'Ada', tags: ['vip', 'newsletter'] } },
     items: [

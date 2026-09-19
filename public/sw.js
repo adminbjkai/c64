@@ -8,7 +8,7 @@
 // VERSION is stamped from package.json by scripts/sync-version.mjs. Bumping
 // it retires the previous cache on activation.
 
-const VERSION = '1.1.1';
+const VERSION = '1.2.0';
 const CACHE = `c64-${VERSION}`;
 const SHELL = ['/', '/public/styles.css', '/icon.svg', '/manifest.webmanifest'];
 
