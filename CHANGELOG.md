@@ -6,6 +6,13 @@ All notable changes to c64 are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-09-19
+
+### Fixed
+- On phones, a compare pane in a stacked board no longer draws its result over the second editor; the pane scrolls instead.
+- View toolbars wrap on narrow panes instead of hiding their overflow, so Prev / Next, Inline and Copy actions stay reachable.
+- The current row in a structural diff is tinted rather than marked with an accent bar.
+
 ## [1.3.0] — 2026-09-19
 
 A design system, applied everywhere. The editor and the result are the work;
@@ -183,7 +190,8 @@ Initial workspace: JSON format/validate, tree, path and graph views, XML,
 YAML, CSV/TSV, Convert, Base64, JWT decode, Minify/Prettify and CSS, in
 tileable panes with a Web Worker for large inputs and an Explain helper.
 
-[Unreleased]: https://github.com/adminbjkai/c64/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/adminbjkai/c64/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/adminbjkai/c64/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/adminbjkai/c64/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/adminbjkai/c64/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/adminbjkai/c64/compare/v1.1.1...v1.2.0

@@ -57,7 +57,7 @@
 | R4-2 | Lane A tokens/type (JetBrains Mono self-hosted)/frame/pane chrome | tests, smoke, screenshots | ✅ | fonts 105 KB; heights measured 40/32/36/28/24 |
 | R4-3 | Lane B view primitives (src/views/ui.ts) + all 26 views migrated | tests, screenshots | ✅ | 12 screenshots reviewed by lane; overflow probe clean |
 | R4-4 | Lane C drag-reorder, view-as, inline copy, keyboard, palette groups | tests, browser | ✅ | 39/39 browser checks; +17 tests |
-| R4-5 | Merge, verify, docs, release v1.3.0, deploy | verifier PASS, CI, live | 🔶 | 704/704, SMOKE OK, healthz 1.3.0 live, tag pushed; verifier running |
+| R4-5 | Merge, verify, docs, release v1.3.0, deploy | verifier PASS, CI, live | ✅ | verifier PASS-with-concerns; narrow-screen gaps fixed in v1.3.1 (mobile A/B overlap probe: overlap False); CI success; release assets |
 
 ## Decisions log
 - Accent moves from green to indigo (#4a5bd8 / #8b97ff) so green means "valid"; JetBrains Mono self-hosted is the one bold typographic choice. (2026-09-19)
