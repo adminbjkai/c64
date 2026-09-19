@@ -25,6 +25,20 @@
 | 8 | GitHub repo + CI + release v1.0.0 | `gh release view v1.0.0` | ✅ | github.com/adminbjkai/c64; CI success on main + v1.0.0 (Node 20/22/24); release asset c64-v1.0.0.tar.gz |
 | 9 | Fresh-context verification | verifier PASS | ✅ | fable-verifier: PASS on all 8 criteria (tests, registries, docs sync, leftovers, live site, browser, privacy, GitHub) |
 
+## Round 2 (2026-09-19) — v1.1: compare tools + competitive gap closure
+
+| # | Stage | Acceptance | Status | Evidence |
+|---|---|---|---|---|
+| R2-1 | UX audit + fix: sidebar pick asks once (fresh/ready states) | verifier PASS, live | ✅ | verifier 12/12; deployed |
+| R2-2 | Competitive research brief (IT-Tools, DevToys, CyberChef, jsondiff…) | decided gap list | ✅ | researcher brief, 18 tools + 8 UX items |
+| R2-3 | Two-input (A/B) editor contract; Text Diff uses it | tests + smoke | ✅ | 410/410, SMOKE OK, commit "Two-input tools" |
+| R2-4 | Lane 1 Compare: json-diff, xml-diff, yaml-diff, json-patch, list-compare | tests green | 🔶 | running |
+| R2-5 | Lane 2 Data: json-schema, json-table, json-flatten, json-sort, toml (+Convert), gzip | tests green | 🔶 | running |
+| R2-6 | Lane 3 Generators: qr-code, totp, lorem, string-utils, math-eval | tests green | 🔶 | running |
+| R2-7 | Lane 4 Utilities: unit-convert, ip-subnet, html-to-markdown, data-url, chmod | tests green | 🔶 | running |
+| R2-8 | Shell: highlighting, favourites/recent, info panel, swap, data-URL uploads | browser check | ✅ | 24 hl spans, favourites section, no errors (screenshot) |
+| R2-9 | Register + style all lanes, docs/README/CHANGELOG, screenshots, v1.1.0 release, deploy | verifier PASS, CI green, live | ⬜ | |
+
 ## Decisions log
 - Keep zero runtime deps and no bundler (auditability is the product's point). Hash mode uses WebCrypto (async) → `run` may return a Promise. (2026-09-18)
 - Lanes must not edit shared registries (modes/index.ts, views/index.ts, icons.ts, types.ts); orchestrator wires them. (2026-09-18)
