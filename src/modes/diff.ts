@@ -1,8 +1,9 @@
 /**
- * Text Diff mode. The pane has one input, so the two texts are separated by a
- * line containing only `=====` (five or more `=`, configurable). Line mode
- * produces a unified-style listing; word/char mode an inline `[-old-]{+new+}`
- * listing. The view shows a side-by-side or inline rendering.
+ * Text Diff — compares two texts by line, word or character (Myers diff,
+ * see src/lib/diff.ts). It is a two-input tool: the pane shows Before / After
+ * editors and the second text arrives as `ctx.inputB`. A single text with a
+ * `=====` separator line still works, for pasted-in-one-box comparisons and
+ * old share links.
  */
 
 import { type ToolMode, type ModeResult, type RunContext } from './types.js';
@@ -67,7 +68,7 @@ export const diffMode: ToolMode = {
   id: 'diff',
   label: 'Text Diff',
   description: 'Compare two texts by line, word or character with a side-by-side or inline view.',
-  category: 'Developer',
+  category: 'Compare',
   icon: 'diff',
   keywords: ['compare', 'patch', 'myers', 'changes', 'unified'],
   emptyHint: 'Paste the original text in Before and the changed text in After.',

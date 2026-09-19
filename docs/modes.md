@@ -40,6 +40,7 @@ Pretty / Raw is the switch in every pane's option bar: *Pretty* is the formatted
 | **XML Compare** <br><sub>`xml-diff`</sub> | Compare two XML documents by structure — attributes, text and child elements — ignoring formatting. | yes | **Arrays**: `index` / `lcs` / `key` / `set` (default `index`)<br>**Key fields**: free text (default `id`)<br>**Ignore case** (off by default)<br>**Trim strings** (on by default)<br>**Numeric strings** (off by default)<br>**Ignore paths**: free text<br>**Only changes** (on by default) |
 | **YAML Compare** <br><sub>`yaml-diff`</sub> | Compare two YAML documents by their parsed values, ignoring comments and formatting. | yes | **Arrays**: `index` / `lcs` / `key` / `set` (default `index`)<br>**Key fields**: free text (default `id`)<br>**Ignore case** (off by default)<br>**Trim strings** (off by default)<br>**Numeric strings** (off by default)<br>**Ignore paths**: free text<br>**Only changes** (on by default) |
 | **JSON Patch / Merge Patch** <br><sub>`json-patch`</sub> | Apply an RFC 6902 JSON Patch or RFC 7386 Merge Patch to a document and see the result. | yes | **Format**: `auto` / `json-patch` / `merge-patch` (default `auto`)<br>**Show diff** (off by default) |
+| **Text Diff** <br><sub>`diff`</sub> | Compare two texts by line, word or character with a side-by-side or inline view. | — | **Granularity**: `line` / `word` / `char` (default `line`)<br>**Ignore whitespace** (off by default)<br>**Ignore case** (off by default) |
 | **List Compare** <br><sub>`list-compare`</sub> | Compare two line lists: items in both, only in A, only in B, union and symmetric difference. | — | **Show**: `all` / `intersection` / `onlyA` / `onlyB` / `union` / `symmetric` (default `all`)<br>**Ignore case** (off by default)<br>**Trim** (on by default)<br>**Unique** (on by default) |
 
 ## Encoding
@@ -95,7 +96,6 @@ Pretty / Raw is the switch in every pane's option bar: *Pretty* is the formatted
 
 | Tool | What it does | Pretty / Raw | Options |
 |---|---|---|---|
-| **Text Diff** <br><sub>`diff`</sub> | Compare two texts by line, word or character with a side-by-side or inline view. | — | **Granularity**: `line` / `word` / `char` (default `line`)<br>**Ignore whitespace** (off by default)<br>**Ignore case** (off by default) |
 | **Regex Tester** <br><sub>`regex`</sub> | Try a JavaScript regular expression against text: highlight matches, list groups, replace or split. | — | **Pattern**: free text<br>**Flags**: free text (default `g`)<br>**Action**: `match` / `replace` / `split` / `test` (default `match`)<br>**Replacement**: free text |
 | **Unix Time ↔ Date** <br><sub>`timestamp`</sub> | Convert unix timestamps (s, ms, µs, ns) and dates to every common form, with relative time. | — | **Output**: `all` / `seconds` / `milliseconds` / `iso` (default `all`)<br>**Timezone**: free text (default `UTC`) |
 | **Cron Expression** <br><sub>`cron`</sub> | Explain a cron schedule in plain English and list its next run times in any time zone. | — | **Time zone**: free text (default `UTC`) |

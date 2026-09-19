@@ -57,6 +57,7 @@ const PATHS: Record<string, string> = {
   swapAb: 'M4 8h13l-3-3M20 16H7l3 3',
   history: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2',
   // shell icons
+  plus: 'M12 5v14M5 12h14',
   command: 'M8 3a3 3 0 0 0 0 6h8a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H8a3 3 0 1 0 3 3V6a3 3 0 0 0-3-3z',
   pipe: 'M4 6h5a3 3 0 0 1 3 3v6a3 3 0 0 0 3 3h5M17 15l3 3-3 3',
   maximize: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
