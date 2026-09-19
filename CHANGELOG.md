@@ -6,7 +6,52 @@ All notable changes to c64 are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-09-19
+
+Planned against what IT-Tools, DevToys, CyberChef, JSON Crack and the JSON
+diff sites offer; closes the common gaps while staying local-only.
+
+### Added
+- **Compare tools** with proper side-by-side **A / B editors** (Swap button,
+  per-editor counts): **JSON Compare**, **XML Compare** and **YAML Compare**
+  share one structural diff engine (key-order insensitive; arrays by index,
+  LCS, key field or set; move detection; ignore paths; case / whitespace /
+  numeric-string normalisation) with a side-by-side or inline tree, filter
+  chips, Prev / Next navigation and **JSON Patch (RFC 6902)** as the Raw
+  output. **JSON Patch / Merge Patch** applies RFC 6902 or RFC 7386 patches.
+  **List Compare** gives intersection, differences, union and symmetric
+  difference of two lists. Text Diff now uses the A / B editors too.
+- **JSON tools**: Schema Validate (draft-07 / 2019-09 / 2020-12 core keywords,
+  `$ref`, formats, all errors listed with pointers), JSON → Table (flattened,
+  sortable, filterable; CSV / TSV / Markdown output), Flatten / Unflatten,
+  Sort & Normalise.
+- **Formats**: TOML ↔ JSON, and TOML in the Convert matrix.
+- **Encoding**: Gzip / Deflate (base64 or hex), Data URL / File Base64 with
+  image preview — dropping or uploading a binary file now produces a data URL.
+- **Generators**: QR Code (versions 1–40, ECC L–H, SVG / PNG download,
+  Wi-Fi / vCard / email / SMS presets), TOTP / HOTP (RFC 6238 / 4226, otpauth
+  URLs, live countdown), Lorem Ipsum / fake data.
+- **Text**: HTML → Markdown, String Utilities (slugify, deburr, NATO, ROT13 /
+  ROT47, obfuscate, roman numerals, unicode escapes, code points).
+- **Developer**: Math Evaluator (exact BigInt integers, variables, percent),
+  Unit Converter (13 categories incl. SI vs IEC data sizes and temperature),
+  IP / Subnet Calculator (IPv4 / IPv6, ranges → CIDR, classification,
+  reverse DNS, splitting), chmod Calculator.
+- **Workspace**: syntax-highlighted output (JSON, XML, HTML, YAML, CSS, SQL,
+  TOML, Markdown, TypeScript, Python, Go), **favourites** (star a tool) and
+  **recent tools** at the top of the sidebar and palette, a per-tool **info
+  panel** (what it does, options, limits, docs link).
+
 ### Changed
+- 53 tools in nine categories (new: Compare, Generators).
+- Empty pane flow: the tool grid only shows for a brand-new pane; after a tool
+  is chosen the editor fills the pane with a compact hint and actions strip.
+- The sidebar pick is confirmed with a title flash and, with several panes, a
+  toast naming the target pane.
+
+### Fixed
+- Status bar updates immediately after a sidebar pick.
+
 - Empty panes no longer ask twice. A brand-new pane shows "Pick a tool" with
   the tool grid (and a "Not sure? Try a … sample" button underneath); once a
   tool is chosen — from the sidebar, the header dropdown, the palette or the
@@ -55,6 +100,7 @@ Initial workspace: JSON format/validate, tree, path and graph views, XML,
 YAML, CSV/TSV, Convert, Base64, JWT decode, Minify/Prettify and CSS, in
 tileable panes with a Web Worker for large inputs and an Explain helper.
 
-[Unreleased]: https://github.com/adminbjkai/c64/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/adminbjkai/c64/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/adminbjkai/c64/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/adminbjkai/c64/releases/tag/v1.0.0
 [0.1.0]: https://github.com/adminbjkai/c64/commit/a2b5f36

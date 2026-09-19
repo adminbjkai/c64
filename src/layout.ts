@@ -242,6 +242,7 @@ export function sanitize(node: unknown): LayoutNode | null {
       state: defaultPaneState({
         mode,
         input,
+        ...(typeof s.inputB === 'string' && s.inputB !== '' ? { inputB: s.inputB } : {}),
         seam: clamp01(typeof s.seam === 'number' ? s.seam : 0.5),
         pretty: s.pretty !== false,
         layout: s.layout === 'side' ? 'side' : 'stacked',

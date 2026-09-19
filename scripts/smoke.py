@@ -37,7 +37,9 @@ def main():
 
             # Every tool: pick via sidebar, insert sample, expect no error box.
             ids = page.eval_on_selector_all(".nav-item", "els => els.map(e => e.dataset.mode)")
-            assert len(ids) == 32, f"expected 32 tools in the sidebar, got {len(ids)}"
+            expected = page.evaluate("() => document.querySelectorAll('.nav-section:not(.nav-special) .nav-item').length")
+            ids = list(dict.fromkeys(ids))
+            assert len(ids) == expected and expected >= 53, f"expected all tools in the sidebar, got {len(ids)} of {expected}"
             for mode in ids:
                 page.click(f'.nav-item[data-mode="{mode}"]')
                 page.click(".pane.is-active .panel-head button:has-text('Sample')")
@@ -108,7 +110,7 @@ def main():
         for p in problems:
             print(" -", p)
         return 1
-    print("SMOKE OK: 32 tools, panes, pipes, palette, boards, persistence")
+    print(f"SMOKE OK: {len(ids)} tools, panes, pipes, palette, boards, persistence")
     return 0
 
 

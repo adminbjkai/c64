@@ -1,6 +1,6 @@
 /**
- * Convert mode: JSON ↔ XML, JSON ↔ YAML, JSON ↔ CSV, plus the transitive
- * pairs (XML → YAML etc.) since everything goes through a JS value.
+ * Convert mode: JSON ↔ XML, JSON ↔ YAML, JSON ↔ CSV, JSON ↔ TOML, plus the
+ * transitive pairs (XML → YAML etc.) since everything goes through a JS value.
  *
  * Source "auto" sniffs the input. Conventions for the lossy directions
  * (XML attributes → "@name", CSV → array of records with string cells unless
@@ -12,13 +12,19 @@ import { parseJson, describeShape } from './json.js';
 import { parseXml, xmlToJson, jsonToXml } from '../lib/xml.js';
 import { parseYaml, stringifyYaml } from '../lib/yaml.js';
 import { parseCsv, csvToJson, jsonToCsv, stringifyCsv, coerceCell } from '../lib/csv.js';
+import { parseToml, stringifyToml, looksLikeToml } from '../lib/toml.js';
 
-export type Format = 'json' | 'xml' | 'yaml' | 'csv';
+export type Format = 'json' | 'xml' | 'yaml' | 'csv' | 'toml';
+
+const FORMATS: readonly Format[] = ['json', 'xml', 'yaml', 'csv', 'toml'];
+const asFormat = (v: unknown): Format | undefined => FORMATS.find((f) => f === v);
 
 export function sniffFormat(text: string): Format {
   const t = text.trim();
   if (t.startsWith('<')) return 'xml';
-  if (t.startsWith('{') || t.startsWith('[')) return 'json';
+  if (t.startsWith('{')) return 'json';
+  if (t.startsWith('[')) return looksLikeToml(t) ? 'toml' : 'json';
+  if (looksLikeToml(t)) return 'toml';
   const lines = t.split(/\r?\n/).filter((l) => l.trim());
   if (lines.length >= 2 && /[,\t;|]/.test(lines[0]!) && !/^\s*[-\w"']+\s*:/.test(lines[0]!)) return 'csv';
   return 'yaml';
@@ -32,6 +38,8 @@ export function parseAs(format: Format, text: string, opts: { typedCells?: boole
       return xmlToJson(parseXml(text));
     case 'yaml':
       return parseYaml(text);
+    case 'toml':
+      return parseToml(text);
     case 'csv': {
       const value = csvToJson(parseCsv(text));
       if (!opts.typedCells || !Array.isArray(value)) return value;
@@ -52,19 +60,20 @@ export function emitAs(format: Format, value: unknown): string {
       return jsonToXml(value, { indent: '  ' });
     case 'yaml':
       return stringifyYaml(value);
+    case 'toml':
+      return stringifyToml(value);
     case 'csv':
       return stringifyCsv(jsonToCsv(value));
   }
 }
 
-const LABEL: Record<Format, string> = { json: 'JSON', xml: 'XML', yaml: 'YAML', csv: 'CSV' };
+const LABEL: Record<Format, string> = { json: 'JSON', xml: 'XML', yaml: 'YAML', csv: 'CSV', toml: 'TOML' };
 
 export function runConvert(input: string, ctx: RunContext): ModeResult {
   if (input.trim() === '') return { output: '', status: '' };
   const fromOpt = ctx.options['from'];
-  const from: Format = fromOpt === 'json' || fromOpt === 'xml' || fromOpt === 'yaml' || fromOpt === 'csv' ? fromOpt : sniffFormat(input);
-  const toOpt = ctx.options['to'];
-  const to: Format = toOpt === 'json' || toOpt === 'xml' || toOpt === 'yaml' || toOpt === 'csv' ? toOpt : 'yaml';
+  const from: Format = asFormat(fromOpt) ?? sniffFormat(input);
+  const to: Format = asFormat(ctx.options['to']) ?? 'yaml';
 
   let value: unknown;
   try {
@@ -78,6 +87,7 @@ export function runConvert(input: string, ctx: RunContext): ModeResult {
     if (fromOpt === 'auto' || fromOpt === undefined) notes.push(`Detected ${LABEL[from]} input.`);
     if (to === 'csv') notes.push('CSV needs an array of flat records; nested values are JSON-encoded in their cell.');
     if (from === 'xml') notes.push('XML attributes become "@name" keys; text alongside child elements becomes "#text".');
+    if (to === 'toml') notes.push('TOML needs an object at the top level; null values are skipped and dates are plain strings.');
     return {
       output,
       notes,
@@ -94,15 +104,16 @@ const FORMAT_OPTIONS = [
   { value: 'yaml', label: 'YAML' },
   { value: 'xml', label: 'XML' },
   { value: 'csv', label: 'CSV' },
+  { value: 'toml', label: 'TOML' },
 ];
 
 export const convertMode: ToolMode = {
   id: 'convert',
   label: 'Convert',
-  description: 'Convert between JSON, YAML, XML and CSV in any direction.',
+  description: 'Convert between JSON, YAML, XML, CSV and TOML in any direction.',
   category: 'Formats',
   icon: 'convert',
-  emptyHint: 'Paste JSON, XML, YAML or CSV, pick a target format, copy the result.',
+  emptyHint: 'Paste JSON, XML, YAML, CSV or TOML, pick a target format, copy the result.',
   sample: '[{"sku":"K-1","name":"Keyboard","qty":1,"price":99.5},{"sku":"M-2","name":"Mouse","qty":2,"price":25}]',
   outputLanguage: (ctx) => ({ json: 'json', xml: 'xml', yaml: 'yaml', toml: 'toml' } as const)[String(ctx.options['to'] ?? 'yaml')],
   supportsPretty: false,

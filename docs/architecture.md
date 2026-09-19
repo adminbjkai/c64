@@ -14,6 +14,7 @@ src/layout.ts            pure tiling-tree model (add / remove / swap / resize / 
 src/board.ts             renders the tree to DOM; seams, zoom, pipes, undo-close
 src/pane.ts              one pane: header + menu, options, editor with gutter, output + find, views
 src/palette.ts           command palette (fuzzy search over tools, actions, panes, boards)
+src/highlight.ts         regex tokenisers that colour the text output per language
 src/store.ts             localStorage persistence: boards file, prefs, theme (with v0.1 migration)
 src/shortcuts.ts         keyboard shortcut table (also feeds the help panel and docs)
 src/runner.ts            runs a mode inline (small input) or in the Web Worker (large input)
@@ -67,7 +68,7 @@ docs/                    this folder
 
 ## Adding things
 
-* A new tool: see [adding-a-mode.md](adding-a-mode.md).
+* A new tool: see [adding-a-mode.md](adding-a-mode.md). Compare-style tools declare `inputs: 2` and receive the second editor as `ctx.inputB`.
 * A new rich view: implement `ViewRenderer` in `src/views/` and register the
   `kind` in `src/views/index.ts`.
 * A new shortcut: add a row to `buildShortcuts()` in `src/shortcuts.ts` — the

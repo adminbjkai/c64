@@ -23,7 +23,8 @@ test('every registered mode has a sample that runs without error', async () => {
     const r = await m.run(m.sample, { ...ctx(m.sampleOptions ?? {}), ...(m.inputs === 2 ? { inputB: m.sampleB ?? '' } : {}) });
     assert.equal(r.error, undefined, `${m.id} sample failed: ${r.error?.message}`);
     assert.ok(r.output.length > 0 || r.view, `${m.id} produced nothing`);
-    if (m.id !== 'uuid') assert.equal((await m.run('', ctx())).output, '', `${m.id} empty input`); // uuid generates ids for empty input by design
+    // Generators (uuid, lorem) produce output for empty input by design.
+    if (!['uuid', 'lorem'].includes(m.id)) assert.equal((await m.run('', ctx())).output, '', `${m.id} empty input`);
   }
   assert.equal(getMode('nope').id, 'json');
 });

@@ -34,7 +34,7 @@ nginx vhost, enables and restarts the service, reloads nginx and checks
 
 * Serves `/`, `/public/*`, `/dist/*` and the PWA root files
   (`/sw.js`, `/manifest.webmanifest`, `/icon*.{svg,png}`).
-* `GET /healthz` → `{"ok":true,"version":"1.0.0"}` (no caching).
+* `GET /healthz` → `{"ok":true,"version":"<package.json version>"}` (no caching).
 * In production: `ETag` + `Last-Modified`, `Cache-Control: public, max-age=3600,
   stale-while-revalidate=86400` for assets, `no-cache` for the document and the
   service worker, brotli/gzip for text types, and the security headers

@@ -944,6 +944,8 @@ export class PaneView {
       'json-tree': 'Tree', 'json-path': 'Tree & path', 'json-graph': 'Graph', jwt: 'Decoded token', table: 'Table',
       url: 'URL breakdown', 'case-all': 'All cases', hash: 'Digests', basen: 'Bases', timestamp: 'Dates', uuid: 'Decoded ids',
       diff: 'Differences', regex: 'Matches', markdown: 'Preview', stats: 'Statistics', cron: 'Schedule', color: 'Colors',
+      'struct-diff': 'Differences', 'list-compare': 'Sets', 'schema-errors': 'Validation', qr: 'QR code', totp: 'One-time code',
+      units: 'Conversions', subnet: 'Subnets', 'data-url': 'File', chmod: 'Permissions',
     };
     this.outputLabel.textContent = r.view && !r.error ? labels[r.view.kind] ?? 'Output' : 'Output';
 

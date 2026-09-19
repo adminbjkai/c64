@@ -19,6 +19,10 @@ export interface ToolMode {
   emptyHint: string;      // one line shown in an empty pane
   sample: string;         // the "Sample" button inserts this — must run without error
   sampleOptions?: {…};    // options the Sample button sets too (e.g. a regex pattern)
+  inputs?: 1 | 2;         // 2 = compare-style tool: the pane shows A/B editors, B arrives as ctx.inputB
+  inputLabels?: [a, b];   // editor labels for two-input tools, e.g. ['Original', 'Changed']
+  sampleB?: string;       // sample for the second editor
+  outputLanguage?: …;     // 'json' | 'xml' | 'yaml' | 'css' | 'sql' | … (or a function of ctx) for output colouring
   controls: ModeControl[];// header options: select | toggle | text
   supportsPretty: boolean;// does the Pretty / Raw switch change the output?
   run(input, ctx): ModeResult | Promise<ModeResult>;

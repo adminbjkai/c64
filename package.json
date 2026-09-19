@@ -1,6 +1,6 @@
 {
   "name": "c64",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Local-first browser workspace for decoding, formatting, converting and inspecting structured text in tileable panes \u2014 JSON, XML, YAML, CSV, Base64, JWT, hashes, diffs, regex, Markdown, SQL and more. Nothing leaves the browser.",
   "private": true,
   "type": "module",

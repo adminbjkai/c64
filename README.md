@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>A local-first workspace for decoding, formatting, converting and inspecting structured text — in tileable panes you can chain together.</strong><br>
-  32 tools · zero dependencies · nothing ever leaves your browser.
+  53 tools · zero dependencies · nothing ever leaves your browser.
 </p>
 
 <p align="center">
@@ -39,13 +39,15 @@ from a command palette and keyboard shortcuts.
 
 | Category | Tools |
 |---|---|
-| **JSON** | Format / Validate (exact error positions + fix hints, tolerant of trailing commas and smart quotes), Tree View, JSON Path (click-to-path + live queries), Graph (zoomable card tree), JSON → Types (TypeScript, Zod, Python, Go, JSON Schema) |
-| **Formats** | XML, YAML, CSV / TSV (table preview, delimiter detection), HTML format / minify, SQL formatter, Convert (JSON ↔ XML ↔ YAML ↔ CSV, any pair) |
-| **Encoding** | Base64 (standard / URL-safe, auto-detect), JWT decode (claims explained, expiry badges, never verifies), Hex / Binary / hexdump, Number base converter (BigInt) |
-| **Text** | Minify / Prettify (auto-detect), CSS, Markdown preview (sanitised), Case converter (13 styles, all at once), Line tools (sort, dedupe, wrap, number, join, split, …), Escape / Unescape (JSON, JS, CSV, shell, regex, XML, SQL), Text statistics |
+| **JSON** | Format / Validate (exact error positions + fix hints, tolerant of trailing commas and smart quotes), Tree View, JSON Path (click-to-path + live queries), Graph (zoomable card tree), JSON → Table (sortable, filterable, CSV / Markdown out), Schema Validate (draft-07 / 2020-12, `$ref`, formats), Flatten / Unflatten, Sort & Normalise, JSON → Types (TypeScript, Zod, Python, Go, JSON Schema) |
+| **Formats** | XML, YAML, TOML, CSV / TSV (table preview, delimiter detection), HTML format / minify, SQL formatter, Convert (JSON ↔ XML ↔ YAML ↔ CSV ↔ TOML, any pair) |
+| **Compare** | JSON Compare, XML Compare, YAML Compare (one structural engine: key-order insensitive, arrays by index / LCS / key / set, moves, ignore paths, side-by-side or inline tree, JSON Patch output), JSON Patch / Merge Patch apply, Text Diff (line / word / char), List Compare (∩ − ∪ Δ) |
+| **Encoding** | Base64 (standard / URL-safe, auto-detect), JWT decode (claims explained, expiry badges, never verifies), Hex / Binary / hexdump, Number base converter (BigInt), Gzip / Deflate, Data URL / File Base64 (image preview, drop any file) |
+| **Text** | Minify / Prettify (auto-detect), CSS, Markdown preview (sanitised), HTML → Markdown, Case converter (13 styles at once), Line tools (sort, dedupe, wrap, number, join, split, …), Escape / Unescape (JSON, JS, CSV, shell, regex, XML, SQL), String utilities (slugify, deburr, NATO, ROT13 / 47, obfuscate, roman, unicode escapes, code points), Text statistics |
 | **Web** | URL encode / decode with a full URL breakdown, Query string ↔ JSON, HTML entities, Color converter (hex / rgb / hsl / hwb / named, contrast, tints & shades) |
-| **Crypto & IDs** | Hash / HMAC (MD5, SHA-1/256/384/512, CRC32), UUID v4 / v7, ULID, nanoid, passwords — generate or decode |
-| **Developer** | Text diff (line / word / char, side-by-side), Regex tester (highlighted matches, named groups, replace, split), Unix time ↔ date (any precision, time zones, relative), Cron expression (plain English + next 10 runs) |
+| **Crypto & IDs** | Hash / HMAC (MD5, SHA-1/256/384/512, CRC32), UUID v4 / v7, ULID, nanoid, passwords (generate or decode), TOTP / HOTP (otpauth URLs, live countdown) |
+| **Generators** | QR Code (SVG / PNG, Wi-Fi / vCard / email / SMS presets), Lorem Ipsum / fake data (names, emails, JSON records, seeded) |
+| **Developer** | Regex tester (highlighted matches, named groups, replace, split), Unix time ↔ date (any precision, time zones, relative), Cron expression (plain English + next 10 runs), Math evaluator (exact big integers, variables, percent), Unit converter (13 categories), IP / Subnet calculator (IPv4 / IPv6, ranges, splitting), chmod calculator |
 
 Full option-by-option reference: [docs/modes.md](docs/modes.md).
 
@@ -72,13 +74,22 @@ offer one-click next steps.
   panes, change boards.
 * **Editor** — line-number gutter, tab inserts a tab, drop or upload a file,
   paste from clipboard, one-click sample for every tool.
-* **Output** — find with match highlighting, copy, download with the right
-  extension, and rich views (tables, trees, swatches, diffs) that stay fast on
-  multi-megabyte inputs thanks to a Web Worker.
+* **Compare tools** get two editors (A / B) with a Swap button; everything
+  else has one. Every pane has a **?** panel describing the tool, its options
+  and limits.
+* **Output** — syntax-coloured text, find with match highlighting, copy,
+  download with the right extension, and rich views (tables, trees, swatches,
+  diffs) that stay fast on multi-megabyte inputs thanks to a Web Worker.
+* **Favourites and recent tools** float to the top of the sidebar and the
+  palette.
 * **Offline** — installable PWA; the shell is cached after the first visit.
 * Light / dark theme, adjustable content size, responsive down to phones.
 
 Shortcut reference: [docs/shortcuts.md](docs/shortcuts.md) (or press `Alt+Shift+/`).
+
+<p align="center">
+  <img src="docs/screenshots/compare.png" width="900" alt="JSON Compare with a side-by-side structural diff next to QR and TOTP panes" />
+</p>
 
 <p align="center">
   <img src="docs/screenshots/tools.png" width="900" alt="Diff, hash, Markdown preview and regex panes" />
@@ -118,8 +129,8 @@ c64.bjk.ai are in [`deploy/`](deploy/).
 ## Design notes
 
 * **Zero runtime dependencies, no bundler.** Plain `tsc` emits ES modules the
-  browser loads directly. The YAML, XML, HTML, SQL, CSS, CSV, Markdown and
-  JSONPath parsers are hand-rolled subsets; each file's header states its exact
+  browser loads directly. The YAML, XML, HTML, SQL, CSS, CSV, TOML, Markdown,
+  JSON Schema, QR and JSONPath implementations are hand-rolled subsets; each file's header states its exact
   scope (for example YAML has no anchors/aliases/tags, XML has no DTD entity
   expansion). That is a deliberate trade for a build you can read end to end.
 * **Modes are pure functions** `(input, ctx) → result`, so they run unchanged in

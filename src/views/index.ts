@@ -19,6 +19,15 @@ import { renderMarkdown } from './markdown.js';
 import { renderStats } from './stats.js';
 import { renderCron } from './cron.js';
 import { renderColor } from './color.js';
+import { renderStructDiff } from './struct-diff.js';
+import { renderListCompare } from './list-compare.js';
+import { renderSchemaErrors } from './schema-errors.js';
+import { renderQr } from './qr.js';
+import { renderTotp } from './totp.js';
+import { renderUnits } from './units.js';
+import { renderSubnet } from './subnet.js';
+import { renderDataUrl } from './data-url.js';
+import { renderChmod } from './chmod.js';
 
 export const VIEWS: Record<string, ViewRenderer> = {
   'json-tree': renderJsonTree,
@@ -38,6 +47,15 @@ export const VIEWS: Record<string, ViewRenderer> = {
   stats: renderStats,
   cron: renderCron,
   color: renderColor,
+  'struct-diff': renderStructDiff,
+  'list-compare': renderListCompare,
+  'schema-errors': renderSchemaErrors,
+  qr: renderQr,
+  totp: renderTotp,
+  units: renderUnits,
+  subnet: renderSubnet,
+  'data-url': renderDataUrl,
+  chmod: renderChmod,
 };
 
 export type { ViewContext, ViewRenderer } from './types.js';
